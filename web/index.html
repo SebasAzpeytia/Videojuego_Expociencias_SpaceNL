@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulador Weathercocking · Sistema Sultana del Norte</title>
+  <meta name="description" content="Simulador interactivo de weathercocking y estabilización activa de cohetes.">
+  <link rel="stylesheet" href="style.css">
+  <!-- Fonts are loaded locally from web/fonts/ via @font-face in style.css -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+
+  <!-- ═══════════ SPLASH / START ═══════════ -->
+  <div id="splash-screen" class="screen active">
+    <div class="scanlines"></div>
+    <div class="splash-content">
+      <div class="logo-badge">SULTANA DEL NORTE</div>
+      <h1 class="title-glow">SIMULADOR DE<br>WEATHERCOCKING</h1>
+      <p class="subtitle">Sistema de Estabilización Activa · Demostración Interactiva</p>
+
+      <div id="camera-status" class="status-indicator">
+        <span class="status-dot"></span>
+        <span id="status-text" class="status-text">Conectando con backend…</span>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        <label style="color: var(--text); font-size: 1.1em; letter-spacing: 1px;">MODO DE CONTROL: 
+          <select id="input-mode-select" style="background: rgba(0,0,0,0.6); border: 1px solid var(--border); color: var(--text); padding: 8px; border-radius: 4px; font-family: inherit; margin-left: 10px; font-size: 0.9em;">
+            <option value="camera" selected>CÁMARA (Cuerpo)</option>
+            <option value="keyboard">TECLADO (Flechas)</option>
+          </select>
+        </label>
+      </div>
+
+      <div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 20px;">
+        <button id="btn-start" class="btn-neon">
+          <span>INICIAR MISIÓN</span>
+        </button>
+        <button id="btn-config" class="btn-neon secondary">
+          <span>CONFIGURACIÓN</span>
+        </button>
+      </div>
+
+      <p class="instructions">
+        Inclínate lateralmente para controlar el cohete.<br>
+        Mantén el cohete estable y evita sobrepasar el umbral crítico.<br>
+        <small>Si la cámara no está disponible, usa las teclas ← →</small>
+      </p>
+    </div>
+  </div>
+
+  <!-- ═══════════ CONFIG PANEL ═══════════ -->
+  <div id="config-screen" class="screen">
+    <div class="scanlines"></div>
+    <div class="config-content">
+      <h2 class="title-glow">PARÁMETROS DE LA MISIÓN</h2>
+      
+      <div class="config-grid">
+        <div class="config-section">
+          <h3>🚀 Especificaciones</h3>
+          <div id="drop-zone" class="drop-zone">
+            <span class="drop-text">Arrastra tu diseño .ork o</span>
+            <label class="btn-neon small">
+              <input type="file" id="conf-ork" accept=".ork" style="display:none;">
+              <span>SELECCIONAR</span>
+            </label>
+            <div id="file-name" class="file-name">Usando modelo por defecto</div>
+          </div>
+          <div id="config-visualizer" style="text-align: center; margin-bottom: 15px;">
+            <canvas id="config-rocket-canvas" width="250" height="250" style="background: rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 8px;"></canvas>
+          </div>
+          <label>Masa Total (kg) <input type="number" id="conf-mass" value="50.0" step="1"></label>
+          <label>Altura (m) <input type="number" id="conf-height" value="3.0" step="0.1"></label>
+          <label>Anchura (m) <input type="number" id="conf-width" value="0.2" step="0.05"></label>
+          <label>Combustible Candy (kg) <input type="number" id="conf-candy" value="10.0" step="1"></label>
+          <label>Multiplicador Inercia <input type="number" id="conf-inertia-mult" value="8.0" step="0.5" title="Aumenta la resistencia a rotar"></label>
+          <label>Amortiguación Rot. <input type="number" id="conf-damping" value="0.8" step="0.05" title="Fricción que detiene el giro"></label>
+          <label style="margin-top: 10px;">Perfil NACA Canards 
+            <select id="conf-naca" style="background: rgba(0,0,0,0.4); border: 1px solid var(--border); color: var(--text); padding: 5px; border-radius: 4px;">
+              <option value="0012">NACA 0012 (Simétrico Delgado)</option>
+              <option value="0018">NACA 0018 (Simétrico Grueso)</option>
+              <option value="66-212" selected>NACA 66-212 (Asimétrico/Camber)</option>
+            </select>
+          </label>
+        </div>
+        
+        <div class="config-section">
+          <h3>🎮 Control & Entorno</h3>
+          <label>Ángulo Max Canards (°) <input type="number" id="conf-angle" value="20.0" step="1"></label>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;">
+            <label style="margin: 0;">Activar Umbral Crítico</label>
+            <input type="checkbox" id="conf-crash-enabled" checked style="width: auto;">
+          </div>
+          <label id="conf-crash-label">Umbral Crítico (°) <input type="number" id="conf-crash" value="45.0" step="1"></label>
+          <label>Ubicación Real</label>
+          <div id="map-container">
+            <div id="map"></div>
+          </div>
+          <div style="display: flex; gap: 10px; margin-top: 5px;">
+            <label style="flex:1">Lat <input type="text" id="conf-lat" value="25.6866" readonly></label>
+            <label style="flex:1">Lon <input type="text" id="conf-lon" value="-100.3161" readonly></label>
+          </div>
+          <label>Fecha <input type="date" id="conf-date"></label>
+          <label>Hora <input type="time" id="conf-time"></label>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: center; margin-top: 20px;">
+        <button id="btn-save-config" class="btn-neon">
+          <span>GUARDAR Y CERRAR</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ COUNTDOWN OVERLAY ═══════════ -->
+  <div id="replay-overlay" class="overlay hidden" style="z-index: 50; flex-direction: column; background: rgba(0,20,40,0.85); backdrop-filter: blur(10px);">
+    <h1 style="color: #00d4ff; text-shadow: 0 0 20px #00d4ff; text-align: center; font-size: 2.5rem; letter-spacing: 2px;">INICIANDO SIMULACIÓN PID</h1>
+    <p style="color: white; margin-top: 15px; font-size: 1.2rem; opacity: 0.9;">Analizando respuesta de vuelo automatizada...</p>
+  </div>
+
+  <div id="countdown-overlay" class="screen">
+    <span id="countdown-number" class="countdown-number">3</span>
+  </div>
+
+  <!-- ═══════════ GAME ═══════════ -->
+  <div id="game-screen" class="screen">
+    <canvas id="rocket-canvas"></canvas>
+
+    <!-- Overlay HUD -->
+    <div id="game-ui-overlay">
+      <div>
+        <button id="btn-pause" class="btn-pause">⏸ PAUSA (Espacio)</button>
+        <button id="btn-restart-game" class="btn-pause" style="margin-left: 10px;">🔄 REINICIAR</button>
+      </div>
+      <div id="warning-banner" class="warning-banner hidden">¡ADVERTENCIA! INCLINACIÓN CRÍTICA</div>
+      <div id="guidance-indicator" class="guidance-indicator hidden"></div>
+    </div>
+
+    <!-- HUD — left panel -->
+    <div class="hud-panel hud-left">
+      <div class="hud-item">
+        <label>DESVIACIÓN COHETE</label>
+        <span id="hud-deviation" class="hud-value green">0.0°</span>
+      </div>
+      <div class="hud-item">
+        <label id="hud-user-label">INCLINACIÓN USUARIO (CANARDS)</label>
+        <span id="hud-user-angle" class="hud-value">0.0°</span>
+      </div>
+      <div class="hud-item">
+        <label>DESVIACIÓN ACUMULADA</label>
+        <span id="hud-acc-dev" class="hud-value">0.0°</span>
+      </div>
+      <div class="hud-item">
+        <label>FUERZA VIENTO</label>
+        <span id="hud-wind" class="hud-value">0.0 N</span>
+      </div>
+    </div>
+
+    <!-- HUD — top center candy gauge -->
+    <div class="hud-panel hud-top">
+      <label>COMBUSTIBLE CANDY</label>
+      <div class="candy-gauge-container">
+        <div id="candy-bar" class="candy-bar"></div>
+      </div>
+      <span id="hud-candy-val" class="hud-value-big">10.0 kg</span>
+    </div>
+
+    <!-- HUD — right panel -->
+    <div class="hud-panel hud-right">
+      <div class="hud-item meteo-box">
+        <label>🌦️ CLIMA REAL</label>
+        <div id="meteo-desc" class="meteo-text">Cargando...</div>
+      </div>
+      <div class="hud-item">
+        <label>ALTITUD</label>
+        <span id="hud-altitude" class="hud-value">0 m</span>
+      </div>
+      <div class="hud-item">
+        <label>VEL. ANGULAR</label>
+        <span id="hud-angvel" class="hud-value">0.0 °/s</span>
+      </div>
+      <div class="hud-item">
+        <label>VIENTO (km/h)</label>
+        <span id="hud-windspeed" class="hud-value">0.0</span>
+      </div>
+    </div>
+
+    <!-- Camera PiP — receives base64 JPEG from backend -->
+    <div id="camera-pip">
+      <div class="pip-header"><span class="rec-dot"></span> CÁMARA EN VIVO</div>
+      <div class="pip-container">
+        <img id="camera-frame" alt="Camera feed">
+        <div id="pip-placeholder" class="pip-placeholder">SIN CÁMARA</div>
+      </div>
+    </div>
+
+    <!-- Minimap 2D -->
+    <div id="minimap-container">
+      <div class="pip-header">MINI-MAPA 2D</div>
+      <canvas id="minimap-canvas" width="160" height="200"></canvas>
+    </div>
+
+
+  </div>
+
+  <!-- ═══════════ RESULTS ═══════════ -->
+  <div id="results-screen" class="screen">
+    <div class="scanlines"></div>
+    <div class="results-content">
+      <h1 id="results-title" class="title-glow">MISIÓN COMPLETADA</h1>
+
+      <div class="results-grid">
+        <!-- Human card -->
+        <div class="result-card human-card">
+          <h2><span class="icon">👤</span> CONTROL HUMANO</h2>
+          <canvas id="human-traj-canvas" width="420" height="220"></canvas>
+          <div class="stats-row">
+            <div class="stat"><label>Desv. Máx</label><span id="stat-h-max">—</span></div>
+            <div class="stat"><label>Desv. Prom</label><span id="stat-h-avg">—</span></div>
+            <div class="stat"><label>σ Dispersión</label><span id="stat-h-std">—</span></div>
+          </div>
+        </div>
+
+        <!-- VS -->
+        <div class="result-vs">
+          <div class="vs-badge">VS</div>
+          <div class="reduction-block">
+            <span id="stat-reduction" class="reduction-value">—</span>
+            <span class="reduction-label">REDUCCIÓN<br>DE DISPERSIÓN</span>
+          </div>
+        </div>
+
+        <!-- PID card -->
+        <div class="result-card pid-card">
+          <h2><span class="icon">🛰️</span> SISTEMA SULTANA DEL NORTE</h2>
+          <div class="pid-badge">PID @ 200 Hz</div>
+          <canvas id="pid-traj-canvas" width="420" height="220"></canvas>
+          <div class="stats-row">
+            <div class="stat"><label>Desv. Máx</label><span id="stat-p-max">—</span></div>
+            <div class="stat"><label>Desv. Prom</label><span id="stat-p-avg">—</span></div>
+            <div class="stat"><label>σ Dispersión</label><span id="stat-p-std">—</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Combined trajectory overlay -->
+      <div class="combined-chart-wrap">
+        <h3>TRAYECTORIA COMPARATIVA</h3>
+        <canvas id="combined-canvas" width="900" height="260"></canvas>
+        <div class="legend-row">
+          <span class="legend-swatch human-swatch"></span> Control Humano
+          <span class="legend-swatch pid-swatch"></span> Sistema Sultana del Norte
+        </div>
+      </div>
+
+      <button id="btn-restart" class="btn-neon"><span>REINICIAR MISIÓN</span></button>
+    </div>
+  </div>
+
+  <!-- All vision runs in Python backend — no CDN scripts needed -->
+  <script src="app.js"></script>
+</body>
+</html>
