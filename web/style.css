@@ -83,10 +83,19 @@ html, body {
   display: none;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  padding: 2rem 0;
   z-index: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 .screen.active { display: flex; }
+
+#game-screen, #countdown-overlay {
+  justify-content: center;
+  padding: 0;
+  overflow: hidden;
+}
 
 /* ── Scanlines overlay ───────────────────────────────────────────────── */
 .scanlines {
