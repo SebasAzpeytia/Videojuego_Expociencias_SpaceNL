@@ -1,0 +1,25 @@
+[project]
+name = "videojuego-expociencias-spacenl"
+version = "0.1.0"
+description = "Videojuego simulador de weathercocking"
+readme = "README.md"
+authors = [
+    { name = "SebasAzpeytia", email = "azpeytiagael@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "mediapipe==0.10.14",
+    "opencv-python>=4.8",
+    "pyqt6>=6.11.0",
+    "pyqt6-webengine>=6.11.0",
+    "pywebview>=4.0",
+    "qtpy>=2.4.3",
+    "websockets>=12.0",
+]
+
+[project.scripts]
+videojuego-expociencias-spacenl = "videojuego_expociencias_spacenl:main"
+
+[build-system]
+requires = ["uv_build>=0.12.15,<0.13.0"]
+build-backend = "uv_build"
