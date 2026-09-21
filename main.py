@@ -237,7 +237,17 @@ async def _ws_handler(ws):
             
             input_mode = config.get("input_mode", "camera")
             _use_cam = (input_mode == "camera") and _cam.active
-
+            
+            # Generate random target destination
+            import random
+            t_min = float(config.get("target_min", 100.0))
+            t_max = float(config.get("target_max", 300.0))
+            if t_min > t_max: t_min, t_max = t_max, t_min
+            target_dist = random.uniform(t_min, t_max)
+            target_dir = random.choice([-1, 1])
+            target_x = round(target_dist * target_dir, 2)
+            config["target_x"] = target_x
+            
             _sim = RocketSimulator(config)
             _active = True
             _tick = 0
@@ -245,7 +255,8 @@ async def _ws_handler(ws):
                 "action": "started",
                 "camera_active": _use_cam,
                 "weather": weather,
-                "ork_geo": ork_geo
+                "ork_geo": ork_geo,
+                "target_x": target_x
             }))
         # ── physics tick ────────────────────────────────────────────────
         elif action == "update" and _active and _sim is not None:

@@ -58,6 +58,7 @@ class RocketSimulator:
         # Wind bounds from config (using base wind from meteo + some variance)
         base_wind_kmh = float(config.get("wind_speed", 10.0))
         self.wind_base_ms = base_wind_kmh / 3.6
+        self.target_x = float(config.get("target_x", 0.0))
         self.wind_var_ms = self.wind_base_ms * 0.5  # +/- 50% variance
         
         # Derived physical properties
@@ -312,8 +313,15 @@ class RocketSimulator:
         drag_y = drag_mag * (self.vertical_velocity / v_mag) if v_mag > 0 else 0.0
         drag_x = drag_mag * (self.lateral_velocity / v_mag) if v_mag > 0 else 0.0
         
-        vacc = (thrust_y - current_mass * 9.81 - drag_y) / current_mass
-        lacc = (thrust_x - drag_x) / current_mass
+        # --- Body Lift ---
+        v_angle = math.atan2(self.lateral_velocity, self.vertical_velocity) if v_mag > 0.1 else (0.0 if self.vertical_velocity >= 0 else math.pi)
+        aoa = (self.angle - v_angle + math.pi) % (2 * math.pi) - math.pi
+        lift_mag = 0.5 * self.RHO * (v_mag**2) * self.a_frontal * 2.0 * math.sin(aoa)
+        lift_x = lift_mag * math.cos(v_angle)
+        lift_y = lift_mag * -math.sin(v_angle)
+        
+        vacc = (thrust_y + lift_y - current_mass * 9.81 - drag_y) / current_mass
+        lacc = (thrust_x + lift_x - drag_x) / current_mass
         
         self.vertical_velocity += vacc * dt
         self.lateral_velocity += lacc * dt
@@ -421,8 +429,18 @@ class RocketSimulator:
                 X_cp = self._calculate_barrowman_cp()
                 wind_torque, _ = self._step_wind(dt, X_cp)
 
-            # PID for canard angle (Positive error -> positive cmd -> negative torque)
-            target = 0.0 if v_vel >= 0 else math.pi
+            # Cascading Guidance System (Pos -> Vel -> Angle)
+            pos_err = getattr(self, 'target_x', 0.0) - lat
+            desired_lat_vel = max(-150.0, min(150.0, pos_err * 0.75))
+            vel_err = desired_lat_vel - lat_vel
+            
+            base_target = 0.0 if v_vel >= 0 else math.pi
+            if v_vel >= 0:
+                tilt = max(-math.pi/4, min(math.pi/4, vel_err * 0.03))
+            else:
+                tilt = -max(-math.pi/4, min(math.pi/4, vel_err * 0.03))
+                
+            target = (base_target + tilt + math.pi) % (2 * math.pi) - math.pi
             dev_rad = (angle - target + math.pi) % (2 * math.pi) - math.pi
             err = dev_rad
             
@@ -479,8 +497,14 @@ class RocketSimulator:
             drag_y = drag_mag * (v_vel / v_mag) if v_mag > 0 else 0.0
             drag_x = drag_mag * (lat_vel / v_mag) if v_mag > 0 else 0.0
             
-            v_acc = (thrust_y - current_mass * 9.81 - drag_y) / current_mass
-            l_acc = (thrust_x - drag_x) / current_mass
+            v_angle = math.atan2(lat_vel, v_vel) if v_mag > 0.1 else (0.0 if v_vel >= 0 else math.pi)
+            aoa = (angle - v_angle + math.pi) % (2 * math.pi) - math.pi
+            lift_mag = 0.5 * self.RHO * (v_mag**2) * getattr(self, 'a_frontal', 0.05) * 2.0 * math.sin(aoa)
+            lift_x = lift_mag * math.cos(v_angle)
+            lift_y = lift_mag * -math.sin(v_angle)
+            
+            v_acc = (thrust_y + lift_y - current_mass * 9.81 - drag_y) / current_mass
+            l_acc = (thrust_x + lift_x - drag_x) / current_mass
             
             v_vel += v_acc * dt
             lat_vel += l_acc * dt

@@ -94,6 +94,8 @@
             <input type="checkbox" id="conf-crash-enabled" checked style="width: auto;">
           </div>
           <label id="conf-crash-label">Umbral Crítico (°) <input type="number" id="conf-crash" value="45.0" step="1"></label>
+          <label>Distancia Mín. Objetivo (m) <input type="number" id="conf-target-min" value="100" step="10"></label>
+          <label>Distancia Máx. Objetivo (m) <input type="number" id="conf-target-max" value="300" step="10"></label>
           <label>Ubicación Real</label>
           <div id="map-container">
             <div id="map"></div>
@@ -136,6 +138,7 @@
         <button id="btn-restart-game" class="btn-pause" style="margin-left: 10px;">🔄 REINICIAR</button>
       </div>
       <div id="warning-banner" class="warning-banner hidden">¡ADVERTENCIA! INCLINACIÓN CRÍTICA</div>
+      <div id="target-indicator" class="target-indicator hidden"></div>
       <div id="guidance-indicator" class="guidance-indicator hidden"></div>
     </div>
 
@@ -222,6 +225,10 @@
             <div class="stat"><label>Desv. Prom</label><span id="stat-h-avg">—</span></div>
             <div class="stat"><label>σ Dispersión</label><span id="stat-h-std">—</span></div>
           </div>
+          <div class="target-result">
+            <span class="metric-label" style="display:block; text-align:center; color:#88aacc; font-size: 0.8rem; letter-spacing:0.1em; margin-bottom:5px;">Distancia al Objetivo</span>
+            <span id="h-dist" class="metric-val" style="display:block; text-align:center; color: #ff6600; font-size: 1.5rem; font-weight:700;">0.0 m</span>
+          </div>
         </div>
 
         <!-- VS -->
@@ -242,6 +249,10 @@
             <div class="stat"><label>Desv. Máx</label><span id="stat-p-max">—</span></div>
             <div class="stat"><label>Desv. Prom</label><span id="stat-p-avg">—</span></div>
             <div class="stat"><label>σ Dispersión</label><span id="stat-p-std">—</span></div>
+          </div>
+          <div class="target-result">
+            <span class="metric-label" style="display:block; text-align:center; color:#88aacc; font-size: 0.8rem; letter-spacing:0.1em; margin-bottom:5px;">Distancia al Objetivo</span>
+            <span id="p-dist" class="metric-val" style="display:block; text-align:center; color: #00ff88; font-size: 1.5rem; font-weight:700;">0.0 m</span>
           </div>
         </div>
       </div>

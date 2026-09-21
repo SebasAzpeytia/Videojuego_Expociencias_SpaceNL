@@ -181,6 +181,7 @@ function connectWS() {
     if (d.action === "started") {
       cameraActive = !!d.camera_active;
       gameState = "playing";
+      rocket.targetX = d.target_x || 0;
       showScreen("game-screen");
       resizeCanvas();
       
@@ -347,7 +348,22 @@ function updateHUD() {
     else $candyBar.style.backgroundColor = "var(--green)";
   }
 
-  // Guidance Indicator removed per user request
+  // Target Indicator
+  const targetIndicator = document.getElementById("target-indicator");
+  if (targetIndicator && rocket.targetX !== undefined) {
+    const dist = rocket.targetX - rocket.lateralPos;
+    if (Math.abs(dist) > 5) {
+      targetIndicator.classList.remove("hidden");
+      if (dist > 0) {
+        targetIndicator.innerText = "OBJETIVO A " + Math.abs(dist).toFixed(0) + "m ➔";
+      } else {
+        targetIndicator.innerText = "⬅ OBJETIVO A " + Math.abs(dist).toFixed(0) + "m";
+      }
+    } else {
+      targetIndicator.classList.remove("hidden");
+      targetIndicator.innerText = "🎯 ¡SOBRE EL OBJETIVO! 🎯";
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -622,8 +638,44 @@ function renderMinimap() {
   
   if (rocket.path.length === 0) return;
   
-  const maxAlt = Math.max(50, rocket.altitude);
-  const maxLat = 20;
+  const targetX = rocket.targetX || 0;
+  let maxAlt = 50;
+  let maxLat = Math.abs(targetX);
+  for (const pt of rocket.path) {
+    if (pt.y > maxAlt) maxAlt = pt.y;
+    if (Math.abs(pt.x) > maxLat) maxLat = Math.abs(pt.x);
+  }
+  maxAlt = maxAlt * 1.1; // 10% vertical padding
+  maxLat = Math.max(20, maxLat) * 1.3; // 30% horizontal padding
+  
+  // Draw base
+  mCtx.fillStyle = "rgba(0, 212, 255, 0.8)";
+  mCtx.beginPath(); mCtx.arc(W/2, H, 3, 0, Math.PI*2); mCtx.fill();
+  
+  // Draw target zone
+  const targetPx = W/2 + (targetX / maxLat) * (W/2);
+  
+  // Target vertical line (dashed)
+  mCtx.strokeStyle = "rgba(255, 60, 60, 0.8)";
+  mCtx.lineWidth = 2;
+  mCtx.setLineDash([4, 4]);
+  mCtx.beginPath(); mCtx.moveTo(targetPx, 0); mCtx.lineTo(targetPx, H); mCtx.stroke();
+  mCtx.setLineDash([]);
+  
+  // Target landing pad (base)
+  mCtx.fillStyle = "#ff4444";
+  mCtx.fillRect(targetPx - 8, H - 4, 16, 4);
+  mCtx.fillStyle = "rgba(255, 50, 50, 0.3)";
+  mCtx.fillRect(targetPx - 8, 0, 16, H);
+  
+  // Highlight distance remaining at current rocket altitude
+  const ptY = H - (rocket.altitude / maxAlt) * H;
+  const currPx = W/2 + (rocket.lateralPos / maxLat) * (W/2);
+  mCtx.strokeStyle = "rgba(255, 255, 0, 0.6)";
+  mCtx.lineWidth = 1;
+  mCtx.setLineDash([2, 2]);
+  mCtx.beginPath(); mCtx.moveTo(currPx, ptY); mCtx.lineTo(targetPx, ptY); mCtx.stroke();
+  mCtx.setLineDash([]);
   
   mCtx.strokeStyle = "#00ff88";
   mCtx.lineWidth = 2;
@@ -843,6 +895,17 @@ function showResults(data) {
   document.getElementById("stat-p-std").textContent = s.pid_std.toFixed(3) + "°";
   document.getElementById("stat-reduction").textContent = s.reduction_percent.toFixed(2) + "%";
 
+  const target = rocket.targetX || 0;
+  
+  const hLast = data.human_trajectory && data.human_trajectory.length > 0 ? data.human_trajectory[data.human_trajectory.length-1].lateral_pos : 0;
+  const hDist = Math.abs(hLast - target);
+  const elHDist = document.getElementById("h-dist");
+  if (elHDist) elHDist.textContent = hDist.toFixed(1) + " m";
+  
+  const pLast = data.pid_trajectory && data.pid_trajectory.length > 0 ? data.pid_trajectory[data.pid_trajectory.length-1].lateral_pos : 0;
+  const pDist = Math.abs(pLast - target);
+  const elPDist = document.getElementById("p-dist");
+  if (elPDist) elPDist.textContent = pDist.toFixed(1) + " m";
   drawTrajectory("human-traj-canvas", data.human_trajectory, "#ff6600", s.human_max_deviation);
   drawTrajectory("pid-traj-canvas",   data.pid_trajectory,   "#00ff88", Math.max(s.pid_max_deviation, 1));
   drawCombined(data);
@@ -944,7 +1007,9 @@ function runCountdown() {
     damping: confInputs.damping.value,
     naca_profile: confInputs.naca.value,
     ork_file: orkFileData,
-    input_mode: document.getElementById('input-mode-select') ? document.getElementById('input-mode-select').value : 'camera'
+    input_mode: document.getElementById('input-mode-select') ? document.getElementById('input-mode-select').value : 'camera',
+    target_min: document.getElementById('conf-target-min').value,
+    target_max: document.getElementById('conf-target-max').value
   };
   initialCandy = parseFloat(confInputs.candy.value) || 10.0;
   currentCrashAngle = parseFloat(confInputs.crash.value);
