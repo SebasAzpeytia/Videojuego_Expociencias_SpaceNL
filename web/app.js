@@ -79,7 +79,7 @@ const confInputs = {
   naca: document.getElementById("conf-naca"),
 };
 
-let initialCandy = 10.0;
+let initialCandy = 0.250;
 
 // ── Star field and Exhaust particles are already declared in global state ──
 function spawnParticle(cx, cy, angle) {
@@ -209,6 +209,8 @@ function connectWS() {
         angle: d.angle,
         angularVelocity: d.angular_velocity,
         altitude: d.altitude,
+        verticalVelocity: d.vertical_velocity,
+        isFalling: d.is_falling,
         lateralPos: d.lateral_pos,
         windForce: d.wind_force,
         windSpeedKmh: d.wind_speed_kmh,
@@ -307,10 +309,10 @@ document.addEventListener("keydown", e => { keysDown[e.key] = true; });
 document.addEventListener("keyup",   e => { keysDown[e.key] = false; });
 
 function pollKeyboard() {
-  const speed = 1.2;
+  const speed = 0.35; // Slower speed for finer control
   if (keysDown["ArrowLeft"]  || keysDown["a"]) keyboardAngle = Math.max(-25, keyboardAngle - speed);
   else if (keysDown["ArrowRight"] || keysDown["d"]) keyboardAngle = Math.min(25, keyboardAngle + speed);
-  else keyboardAngle *= 0.88;
+  else keyboardAngle *= 0.95; // Slower decay so it doesn't snap back to 0 instantly
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -345,31 +347,7 @@ function updateHUD() {
     else $candyBar.style.backgroundColor = "var(--green)";
   }
 
-  // Guidance Indicator
-  const guidance = document.getElementById("guidance-indicator");
-  if (guidance && Math.abs(rocket.angle) > 3) {
-    guidance.classList.remove("hidden");
-    
-    if (Math.abs(rocket.userAngle) < 1) { // Not pressing anything (or deadzone)
-      guidance.className = "guidance-indicator guidance-hint";
-      if (rocket.angle > 0) {
-        guidance.innerText = "👉 ¡INCLÍNATE A LA DERECHA! 👉";
-      } else {
-        guidance.innerText = "👈 ¡INCLÍNATE A LA IZQUIERDA! 👈";
-      }
-    } else {
-      // Are they correcting the tilt? Same sign = correcting
-      if (rocket.angle * rocket.userAngle > 0) {
-        guidance.className = "guidance-indicator guidance-correct";
-        guidance.innerText = "✅ ¡CORRIGIENDO! ✅";
-      } else {
-        guidance.className = "guidance-indicator guidance-wrong";
-        guidance.innerText = "❌ ¡LADO EQUIVOCADO! ❌";
-      }
-    }
-  } else if (guidance) {
-    guidance.classList.add("hidden");
-  }
+  // Guidance Indicator removed per user request
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -407,13 +385,7 @@ function renderGame() {
     ctx.fill();
   }
 
-  // ── Warning Banner Logic ─────────────────────────────────────────
-  const crashAngle = parseFloat(confInputs.crash.value) || 45.0;
-  if (gameState === "playing" && Math.abs(rocket.angle) >= crashAngle - 10) {
-    $warningBanner.classList.remove("hidden");
-  } else {
-    $warningBanner.classList.add("hidden");
-  }
+  // Warning Banner Logic removed during gameplay per user request
 
   // ── Grid lines ───────────────────────────────────────────────────
   ctx.strokeStyle = "rgba(0,212,255,0.06)";
@@ -440,7 +412,20 @@ function renderGame() {
   
   const ry   = H * 0.48;
   const rx   = cx;
-  const ang  = (rocket.angle * Math.PI) / 180;
+  let ang  = (rocket.angle * Math.PI) / 180;
+
+  // ── Ground ────────────────────────────────────────────────────────
+  const groundY = ry + rLen / 2 + rocket.altitude * 1.5;
+  if (groundY < H) {
+    ctx.fillStyle = "#1a2436";
+    ctx.fillRect(0, groundY, W, H - groundY);
+    ctx.strokeStyle = "#2a3b59";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(0, groundY);
+    ctx.lineTo(W, groundY);
+    ctx.stroke();
+  }
 
   ctx.save();
   ctx.translate(rx, ry);
@@ -524,20 +509,22 @@ function renderGame() {
   ctx.shadowBlur = 0;
 
   // Exhaust flame
-  const flicker = Math.random() * 8 + 18;
-  const fg = ctx.createLinearGradient(0, rLen * 0.35, 0, rLen * 0.35 + flicker);
-  fg.addColorStop(0,   "rgba(255,140,0,0.95)");
-  fg.addColorStop(0.4, "rgba(255,60,0,0.7)");
-  fg.addColorStop(1,   "rgba(255,30,0,0)");
-  ctx.fillStyle = fg;
-  ctx.beginPath();
-  ctx.moveTo(-rW / 3, rLen * 0.35);
-  ctx.quadraticCurveTo(-rW / 5, rLen * 0.35 + flicker * 0.6, 0, rLen * 0.35 + flicker);
-  ctx.quadraticCurveTo( rW / 5, rLen * 0.35 + flicker * 0.6, rW / 3, rLen * 0.35);
-  ctx.closePath();
-  ctx.fill();
+  if (rocket.candy > 0) {
+    const flicker = Math.random() * 8 + 18;
+    const fg = ctx.createLinearGradient(0, rLen * 0.35, 0, rLen * 0.35 + flicker);
+    fg.addColorStop(0,   "rgba(255,140,0,0.95)");
+    fg.addColorStop(0.4, "rgba(255,60,0,0.7)");
+    fg.addColorStop(1,   "rgba(255,30,0,0)");
+    ctx.fillStyle = fg;
+    ctx.beginPath();
+    ctx.moveTo(-rW / 3, rLen * 0.35);
+    ctx.quadraticCurveTo(-rW / 5, rLen * 0.35 + flicker * 0.6, 0, rLen * 0.35 + flicker);
+    ctx.quadraticCurveTo( rW / 5, rLen * 0.35 + flicker * 0.6, rW / 3, rLen * 0.35);
+    ctx.closePath();
+    ctx.fill();
 
-  spawnParticle(rx, ry + rLen * 0.35, ang);
+    spawnParticle(rx, ry + rLen * 0.35, ang);
+  }
   ctx.restore();
 
   // ── Particles ────────────────────────────────────────────────────
@@ -559,11 +546,11 @@ function renderGame() {
     const startX = rx - gridPx/2;
     const startY = ry - gridPx/2;
     
-    // Spawn new CFD particles on the top side
+    // Spawn new CFD particles
     for (let j = 0; j < 3; j++) {
       cfdParticles.push({
         x: startX + Math.random() * gridPx,
-        y: startY - 20,
+        y: rocket.isFalling ? startY + gridPx + 20 : startY - 20,
         life: 1.0 + Math.random() * 0.5,
         speedFactor: 25 + Math.random()*20, // Scale lattice velocity to pixel velocity
         size: 1.5 + Math.random()*2.5
@@ -578,7 +565,7 @@ function renderGame() {
       const gy = Math.floor(((cp.y - startY) / gridPx) * ny);
       
       let vx = rocket.windForce * 0.2; // base lateral wind
-      let vy = 12; // base downward drift
+      let vy = rocket.isFalling ? -12 : 12; // base upward/downward drift
       
       // If inside CFD grid, use CFD velocity
       if (gx >= 0 && gx < nx && gy >= 0 && gy < ny) {
@@ -592,7 +579,7 @@ function renderGame() {
       cp.x += vx;
       cp.y += vy;
       
-      if (cp.life <= 0 || cp.y > startY + gridPx + 50) {
+      if (cp.life <= 0 || (rocket.isFalling ? cp.y < startY - 50 : cp.y > startY + gridPx + 50)) {
         cfdParticles.splice(i, 1);
         continue;
       }
@@ -880,7 +867,7 @@ function drawTrajectory(canvasId, traj, color, yMax) {
   cx.beginPath();
   for (let i = 0; i < traj.length; i++) {
     const px = pad + (traj[i].time / maxT) * (W - 2 * pad);
-    const py = midY - (traj[i].angle / effMax) * (H / 2 - pad);
+    const py = midY - (traj[i].dev / effMax) * (H / 2 - pad);
     if (i === 0) cx.moveTo(px, py); else cx.lineTo(px, py);
   }
   cx.stroke(); cx.shadowBlur = 0;
@@ -902,7 +889,7 @@ function drawCombined(data) {
   if (hT.length < 2) return;
 
   const maxT = Math.max(hT[hT.length-1].time, pT.length ? pT[pT.length-1].time : 0);
-  const all  = [...hT.map(p=>Math.abs(p.angle)), ...pT.map(p=>Math.abs(p.angle))];
+  const all  = [...hT.map(p=>Math.abs(p.dev)), ...pT.map(p=>Math.abs(p.dev))];
   const yM   = Math.max(...all, 2) * 1.15;
 
   cx.strokeStyle = "rgba(200,220,255,0.08)"; cx.lineWidth = 1;
@@ -915,7 +902,7 @@ function drawCombined(data) {
     cx.beginPath();
     for (let i = 0; i < traj.length; i++) {
       const px = pad + (traj[i].time / maxT) * (W - 2*pad);
-      const py = midY - (traj[i].angle / yM) * (H/2 - pad);
+      const py = midY - (traj[i].dev / yM) * (H/2 - pad);
       if (i === 0) cx.moveTo(px,py); else cx.lineTo(px,py);
     }
     cx.stroke(); cx.shadowBlur = 0;

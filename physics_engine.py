@@ -5,6 +5,7 @@ Handles rotational dynamics, stochastic wind perturbation and PID replay.
 
 import math
 import random
+from typing import Any
 try:
     import numpy as np
     from cfd_lbm import LBMSolver
@@ -38,14 +39,14 @@ class RocketSimulator:
 
     DT = 1.0 / 60.0      # physics tick (≈ 60 Hz)
 
-    def __init__(self, config: dict = None):
+    def __init__(self, config: dict | None = None):
         if config is None:
             config = {}
             
-        self.dry_mass = float(config.get("mass", 50.0))
+        self.dry_mass = float(config.get("mass", 0.4))
         self.length = float(config.get("height", 3.0))
         self.width = float(config.get("width", 0.2))
-        self.candy = float(config.get("candy", 10.0))
+        self.candy = float(config.get("candy", 0.25))
         self.initial_candy = self.candy
         self.max_user_deg = float(config.get("max_angle", 20.0))
         self.crash_angle = float(config.get("crash_angle", 45.0))
@@ -61,6 +62,7 @@ class RocketSimulator:
         
         # Derived physical properties
         self.a_cross = self.width * self.length
+        self.a_frontal = math.pi * (self.width / 2.0)**2
         self.cd = 0.75
         self.ascent_rate = 80.0
 
@@ -68,6 +70,8 @@ class RocketSimulator:
         self.angle = 0.0              # rad (deviation from vertical)
         self.angular_velocity = 0.0   # rad/s
         self.altitude = 0.0           # m
+        self.vertical_velocity = 0.0  # m/s
+        self.lateral_velocity = 0.0   # m/s
         self.lateral_pos = 0.0        # m
         self.time = 0.0               # s
 
@@ -260,18 +264,21 @@ class RocketSimulator:
 
         current_mass, current_inertia = self._get_mass_and_inertia()
         
-        # Consume Candy
-        candy_consumption_rate = current_mass * 0.05 
-        
-        self.candy -= candy_consumption_rate * dt
-        if self.candy < 0:
-            self.candy = 0.0
+        # Consume Candy & Thrust
+        burn_rate = 0.125
+        thrust = 0.0
+        if self.candy > 0:
+            self.candy -= burn_rate * dt
+            thrust = 138.56
+            if self.candy < 0:
+                self.candy = 0.0
 
         # Aerodynamic Lift Torque from Canards
         X_cp = self._calculate_barrowman_cp()
         
         cl = self._get_canard_cl(user_clamped)
-        q = 0.5 * self.RHO * (self.ascent_rate)**2
+        v_air = max(1.0, abs(self.vertical_velocity))
+        q = 0.5 * self.RHO * (v_air)**2
         
         canard_span = 0.08
         canard_root = 0.1
@@ -292,17 +299,38 @@ class RocketSimulator:
         # Semi-implicit Euler integration
         self.angular_velocity += (total / current_inertia) * dt
         self.angle += self.angular_velocity * dt
-        self.angle = max(-math.pi / 2, min(math.pi / 2, self.angle))
+        while self.angle > math.pi: self.angle -= 2 * math.pi
+        while self.angle < -math.pi: self.angle += 2 * math.pi
 
-        self.altitude += self.ascent_rate * dt
-        self.lateral_pos += math.sin(self.angle) * self.ascent_rate * dt
+        # Full 2D integration
+        thrust_y = thrust * math.cos(self.angle)
+        thrust_x = thrust * math.sin(self.angle)
+        
+        v_mag = math.sqrt(self.vertical_velocity**2 + self.lateral_velocity**2)
+        drag_mag = 0.5 * self.RHO * (v_mag**2) * self.cd * self.a_frontal
+        
+        drag_y = drag_mag * (self.vertical_velocity / v_mag) if v_mag > 0 else 0.0
+        drag_x = drag_mag * (self.lateral_velocity / v_mag) if v_mag > 0 else 0.0
+        
+        vacc = (thrust_y - current_mass * 9.81 - drag_y) / current_mass
+        lacc = (thrust_x - drag_x) / current_mass
+        
+        self.vertical_velocity += vacc * dt
+        self.lateral_velocity += lacc * dt
+        
+        self.altitude += self.vertical_velocity * dt
+        self.lateral_pos += self.lateral_velocity * dt
         self.time += dt
 
         # Record for later PID replay
+        target = 0.0 if self.vertical_velocity >= 0 else math.pi
+        dev_rad = (self.angle - target + math.pi) % (2 * math.pi) - math.pi
+        
         rec = dict(
-            time=round(self.time, 4),
+            time=round(self.time, 2),
             angle=round(math.degrees(self.angle), 2),
-            altitude=round(self.altitude, 1),
+            dev=round(math.degrees(dev_rad), 2),
+            altitude=round(self.altitude, 2),
             lateral_pos=round(self.lateral_pos, 2),
         )
         self.trajectory.append(rec)
@@ -318,7 +346,7 @@ class RocketSimulator:
             self._update_cfd_obstacle()
             # map wind_speed (m/s) to lattice velocity (e.g. max 0.1)
             u_in = (self.wind_speed / 30.0) * 0.15 
-            v_in = 0.15 # simulate downward movement
+            v_in = 0.15 if self.vertical_velocity >= 0 else -0.15
             ux, uy = self.cfd.step(u_inlet=u_in, v_inlet=v_in)
             
             # Send the full 60x60 grid
@@ -330,11 +358,13 @@ class RocketSimulator:
                     "uy": [round(v, 3) for v in uy_down]
                 }
 
-        state_dict = dict(
+        state_dict: dict[str, Any] = dict(
             angle=rec["angle"],
             angular_velocity=round(math.degrees(self.angular_velocity), 2),
             altitude=rec["altitude"],
+            vertical_velocity=round(self.vertical_velocity, 1),
             lateral_pos=rec["lateral_pos"],
+            is_falling=(self.vertical_velocity < 0),
             wind_force=round(wind_force, 2),
             wind_speed_kmh=round(self.wind_speed * 3.6, 1),
             user_angle=round(user_clamped, 1),
@@ -361,6 +391,8 @@ class RocketSimulator:
         omega = 0.0
         alt = 0.0
         lat = 0.0
+        v_vel = 0.0
+        lat_vel = 0.0
 
         # PID gains (tuned for angles)
         KP, KI, KD = 150.0, 5.0, 50.0
@@ -375,8 +407,8 @@ class RocketSimulator:
         sample = 0
         self.candy = getattr(self, 'initial_candy', 10.0) # Reset fuel for simulation
 
-        # run until fuel is depleted or a maximum time (e.g. 20s) to prevent infinite loops
-        while self.candy > 0 and t < 60.0:
+        # run until rocket lands or a maximum time to prevent infinite loops
+        while (alt > 0 or t < 1.0) and t < 60.0:
             if t < total_time:
                 # Interpolate recorded wind torque
                 while (
@@ -390,7 +422,10 @@ class RocketSimulator:
                 wind_torque, _ = self._step_wind(dt, X_cp)
 
             # PID for canard angle (Positive error -> positive cmd -> negative torque)
-            err = angle
+            target = 0.0 if v_vel >= 0 else math.pi
+            dev_rad = (angle - target + math.pi) % (2 * math.pi) - math.pi
+            err = dev_rad
+            
             integral = max(-0.5, min(0.5, integral + err * dt))
             deriv = (err - prev_err) / dt if dt else 0.0
             
@@ -399,7 +434,8 @@ class RocketSimulator:
             
             # Canard Aerodynamics
             cl = self._get_canard_cl(canard_cmd)
-            q = 0.5 * self.RHO * (self.ascent_rate)**2
+            v_air = max(1.0, abs(v_vel))
+            q = 0.5 * self.RHO * (v_air)**2
             canard_span = 0.08
             canard_root = 0.1
             s_canard_real = canard_span * canard_root
@@ -414,7 +450,7 @@ class RocketSimulator:
 
             damp = -self.damping * omega
             
-            current_mass = getattr(self, 'dry_mass', 50.0) + getattr(self, 'candy', 0.0)
+            current_mass = getattr(self, 'dry_mass', 1.5) + getattr(self, 'candy', 0.0)
             current_inertia = ((1 / 12) * current_mass * getattr(self, 'length', 3.0) ** 2) * self.inertia_mult
             
             grav = current_mass * 9.81 * 0.1 * math.sin(angle)
@@ -422,11 +458,35 @@ class RocketSimulator:
             acc = (ctrl + wind_torque + damp + grav) / current_inertia
             omega += acc * dt
             angle += omega * dt
-            alt += self.ascent_rate * dt
-            lat += math.sin(angle) * self.ascent_rate * dt
-
+            while angle > math.pi: angle -= 2 * math.pi
+            while angle < -math.pi: angle += 2 * math.pi
+            
+            burn_rate = 0.125
+            thrust = 0.0
             if getattr(self, 'candy', 0) > 0:
-                self.candy -= current_mass * 0.05 * dt
+                self.candy -= burn_rate * dt
+                thrust = 138.56
+                if self.candy < 0:
+                    self.candy = 0.0
+                    
+            # 2D Kinematics
+            thrust_y = thrust * math.cos(angle)
+            thrust_x = thrust * math.sin(angle)
+            
+            v_mag = math.sqrt(v_vel**2 + lat_vel**2)
+            drag_mag = 0.5 * self.RHO * (v_mag**2) * self.cd * getattr(self, 'a_frontal', 0.05)
+            
+            drag_y = drag_mag * (v_vel / v_mag) if v_mag > 0 else 0.0
+            drag_x = drag_mag * (lat_vel / v_mag) if v_mag > 0 else 0.0
+            
+            v_acc = (thrust_y - current_mass * 9.81 - drag_y) / current_mass
+            l_acc = (thrust_x - drag_x) / current_mass
+            
+            v_vel += v_acc * dt
+            lat_vel += l_acc * dt
+            
+            alt += v_vel * dt
+            lat += lat_vel * dt
 
             prev_err = err
             t += dt
@@ -435,9 +495,10 @@ class RocketSimulator:
             # Downsample to ~20 Hz for JSON transfer
             if sample % 10 == 0:
                 traj.append(dict(
-                    time=round(t, 4),
+                    time=round(t, 2),
                     angle=round(math.degrees(angle), 3),
-                    altitude=round(alt, 1),
+                    dev=round(math.degrees(dev_rad), 3),
+                    altitude=round(alt, 2),
                     lateral_pos=round(lat, 3),
                     user_angle=round(canard_cmd, 2),
                     candy=round(self.candy, 2)

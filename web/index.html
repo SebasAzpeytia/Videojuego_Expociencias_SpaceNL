@@ -71,10 +71,10 @@
           <div id="config-visualizer" style="text-align: center; margin-bottom: 15px;">
             <canvas id="config-rocket-canvas" width="250" height="250" style="background: rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 8px;"></canvas>
           </div>
-          <label>Masa Total (kg) <input type="number" id="conf-mass" value="50.0" step="1"></label>
+          <label>Masa Total (kg) <input type="number" id="conf-mass" value="0.4" step="0.1"></label>
           <label>Altura (m) <input type="number" id="conf-height" value="3.0" step="0.1"></label>
           <label>Anchura (m) <input type="number" id="conf-width" value="0.2" step="0.05"></label>
-          <label>Combustible Candy (kg) <input type="number" id="conf-candy" value="10.0" step="1"></label>
+          <label>Combustible Candy (kg) <input type="number" id="conf-candy" value="0.250" step="0.01"></label>
           <label>Multiplicador Inercia <input type="number" id="conf-inertia-mult" value="8.0" step="0.5" title="Aumenta la resistencia a rotar"></label>
           <label>Amortiguación Rot. <input type="number" id="conf-damping" value="0.8" step="0.05" title="Fricción que detiene el giro"></label>
           <label style="margin-top: 10px;">Perfil NACA Canards 
@@ -165,7 +165,7 @@
       <div class="candy-gauge-container">
         <div id="candy-bar" class="candy-bar"></div>
       </div>
-      <span id="hud-candy-val" class="hud-value-big">10.0 kg</span>
+      <span id="hud-candy-val" class="hud-value-big">0.25 kg</span>
     </div>
 
     <!-- HUD — right panel -->

@@ -19,6 +19,7 @@ import zipfile
 import io
 import xml.etree.ElementTree as ET
 import math
+import typing
 
 import websockets
 
@@ -29,6 +30,7 @@ except ImportError:
     _HAS_WEBVIEW = False
     import webbrowser
 
+# pyrefly: ignore [missing-import]
 from physics_engine import RocketSimulator
 from camera_processor import CameraProcessor
 
@@ -48,15 +50,12 @@ class _StaticHandler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=WEB_DIR, **kw)
 
-    def log_message(self, *_):
+    def log_message(self, format: str, *args: typing.Any) -> None:
         pass
 
     def end_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
         super().end_headers()
-
-
-
 
 # ═══════════════════════════════════════════════════════════════════════
 #  WebSocket — IPC: physics engine + camera angle + PiP frames
@@ -147,10 +146,10 @@ def parse_ork_file(base64_data):
             rocket_elem = root.find(".//rocket")
             
             # Default geometry
-            geo = {
-                "mass": 0,
-                "length": 0,
-                "radius": 0,
+            geo: typing.Dict[str, typing.Any] = {
+                "mass": 0.0,
+                "length": 0.0,
+                "radius": 0.0,
                 "nose_shape": "ogive",
                 "fin_span": 0.05,
                 "fin_root": 0.1
@@ -196,7 +195,7 @@ def parse_ork_file(base64_data):
 
 
 async def _ws_handler(ws):
-    global _sim, _active, _tick
+    global _sim, _active, _tick, _use_cam
 
     async for raw in ws:
         msg = json.loads(raw)
@@ -236,7 +235,6 @@ async def _ws_handler(ws):
                     if ork_geo["length"] > 0: config["height"] = ork_geo["length"]
                     if ork_geo["radius"] > 0: config["width"] = ork_geo["radius"] * 2
             
-            global _use_cam
             input_mode = config.get("input_mode", "camera")
             _use_cam = (input_mode == "camera") and _cam.active
 
@@ -261,17 +259,19 @@ async def _ws_handler(ws):
             
             crashed = False
             if getattr(_sim, 'crash_enabled', True):
-                crashed = abs(math.degrees(_sim.angle)) >= _sim.crash_angle
+                if _sim.vertical_velocity >= 0:
+                    crashed = abs(math.degrees(_sim.angle)) >= _sim.crash_angle
 
-            if _sim.candy <= 0 or crashed:
+            hit_ground = _sim.altitude <= 0.0 and _sim.time > 1.0
+            if hit_ground:
                 _active = False
                 pid_traj = _sim.simulate_pid()
                 
                 h_traj   = _sim.trajectory[::3]
                 p_traj   = pid_traj
 
-                h_dev = [abs(p["angle"]) for p in _sim.trajectory]
-                p_dev = [abs(p["angle"]) for p in pid_traj] if pid_traj else [0]
+                h_dev = [abs(p["dev"]) for p in _sim.trajectory]
+                p_dev = [abs(p["dev"]) for p in pid_traj] if pid_traj else [0]
 
                 h_std = (sum(d ** 2 for d in h_dev) / len(h_dev)) ** 0.5
                 p_std = (sum(d ** 2 for d in p_dev) / len(p_dev)) ** 0.5

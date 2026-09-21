@@ -17,3 +17,9 @@ dependencies = [
     "websockets>=12.0",
 ]
 
+[tool.pyright]
+include = ["."]
+extraPaths = ["."]
+executionEnvironments = [
+  { root = "." }
+]
