@@ -170,6 +170,9 @@ function connectWS() {
     console.log("[WS] connected");
     setCameraStatus("ok", "Backend conectado");
     $btnStart.disabled = false;
+    
+    // Request default ork model
+    wsSend({ action: "load_default_ork" });
   };
 
   ws.onmessage = (e) => {
@@ -261,6 +264,17 @@ function connectWS() {
         if (d.ork_geo.mass > 0) confInputs.mass.value = d.ork_geo.mass.toFixed(1);
         if (d.ork_geo.length > 0) confInputs.height.value = d.ork_geo.length.toFixed(2);
         if (d.ork_geo.radius > 0) confInputs.width.value = (d.ork_geo.radius * 2).toFixed(2);
+        
+        if (d.ork_file) {
+          orkFileData = d.ork_file;
+        }
+
+        if (d.default_loaded) {
+          fileNameDisplay.textContent = "rocket.ork (Modelo por defecto)";
+        }
+        
+        // Trigger a render update for the preview
+        renderConfigRocket();
       } else {
         fileNameDisplay.textContent += " (Error de formato)";
       }

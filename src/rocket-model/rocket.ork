@@ -1,0 +1,252 @@
+<?xml version='1.0' encoding='utf-8'?>
+<openrocket version="1.10" creator="OpenRocket 24.12">
+  <rocket>
+    <name>AKUDHAIEUCFHIWEFCKWUEFHIWUFHCWIFCUWHEFICUWHF</name>
+    <id>a6647cc9-dbbc-480a-957d-739d846e3b08</id>
+    <axialoffset method="absolute">0.0</axialoffset>
+    <position type="absolute">0.0</position>
+    <comment>Cohete A4 </comment>
+    <designer>Hr</designer>
+    <designtype>original</designtype>
+    <motorconfiguration configid="aa6aa33d-93ed-4a10-8a80-80ed48442279" default="true">
+      <stage number="0" active="true"/>
+    </motorconfiguration>
+    <referencetype>maximum</referencetype>
+
+    <subcomponents>
+      <stage>
+        <name>Etapa principal</name>
+        <id>2bef68f6-7b7c-49e2-b184-88d41882181a</id>
+
+        <subcomponents>
+          <nosecone>
+            <name>Ojiva</name>
+            <id>7334d800-6618-4ac2-b65e-f64cee736818</id>
+            <overridemass>0.07434456991776835</overridemass>
+            <overridesubcomponentsmass>false</overridesubcomponentsmass>
+            <overridecg>0.1261728540157621</overridecg>
+            <overridesubcomponentscg>false</overridesubcomponentscg>
+            <overridecd>0.05326684863817783</overridecd>
+            <overridesubcomponentscd>false</overridesubcomponentscd>
+            <finish>normal</finish>
+            <material type="bulk" density="1250.0" group="Plastics">PLA - 100% infill</material>
+            <length>0.18</length>
+            <thickness>0.002</thickness>
+            <shape>ellipsoid</shape>
+            <shapeclipped>false</shapeclipped>
+            <aftradius>0.025400000000000002</aftradius>
+            <aftshoulderradius>0.023</aftshoulderradius>
+            <aftshoulderlength>0.01</aftshoulderlength>
+            <aftshoulderthickness>0.02</aftshoulderthickness>
+            <aftshouldercapped>false</aftshouldercapped>
+            <isflipped>false</isflipped>
+          </nosecone>
+
+          <bodytube>
+            <name>Cuerpo</name>
+            <id>3306ac3a-db1e-44ab-8900-6f042f90cf6c</id>
+            <overridemass>0.298340718029624</overridemass>
+            <overridesubcomponentsmass>false</overridesubcomponentsmass>
+            <overridecg>0.35000000000000003</overridecg>
+            <overridesubcomponentscg>false</overridesubcomponentscg>
+            <overridecd>0.392951793689721</overridecd>
+            <overridesubcomponentscd>false</overridesubcomponentscd>
+            <finish>normal</finish>
+            <material type="bulk" density="1390.0" group="Plastics">PVC</material>
+            <length>0.7000000000000001</length>
+            <thickness>0.002</thickness>
+            <radius>0.025400000000000002</radius>
+            <motormount>
+              <ignitionevent>automatic</ignitionevent>
+              <ignitiondelay>0.0</ignitiondelay>
+              <overhang>0.0</overhang>
+              <motor configid="aa6aa33d-93ed-4a10-8a80-80ed48442279">
+                <type>single</type>
+                <manufacturer>AeroTech</manufacturer>
+                <digest>189c2c23a7eb1d2154694991283fb639</digest>
+                <designation>HP-H115DM</designation>
+                <diameter>0.029</diameter>
+                <length>0.203</length>
+                <delay>14.0</delay>
+              </motor>
+              <ignitionconfiguration configid="aa6aa33d-93ed-4a10-8a80-80ed48442279">
+                <ignitionevent>automatic</ignitionevent>
+                <ignitiondelay>0.0</ignitiondelay>
+              </ignitionconfiguration>
+            </motormount>
+
+            <subcomponents>
+              <trapezoidfinset>
+                <name>Aletas trapezoidales</name>
+                <id>e4e72ad7-45a0-43c3-bc6f-47c8e20b6333</id>
+                <instancecount>4</instancecount>
+                <fincount>4</fincount>
+                <radiusoffset method="surface">0.0</radiusoffset>
+                <angleoffset method="relative">0.0</angleoffset>
+                <rotation>0.0</rotation>
+                <axialoffset method="bottom">0.0</axialoffset>
+                <position type="bottom">0.0</position>
+                <overridemass>0.013994400000000006</overridemass>
+                <overridesubcomponentsmass>false</overridesubcomponentsmass>
+                <overridecg>0.09041496427229809</overridecg>
+                <overridesubcomponentscg>false</overridesubcomponentscg>
+                <overridecd>0.08107319514106062</overridecd>
+                <overridesubcomponentscd>false</overridesubcomponentscd>
+                <finish>normal</finish>
+                <material type="bulk" density="170.0" group="Woods">Balsa</material>
+                <thickness>0.003</thickness>
+                <crosssection>square</crosssection>
+                <cant>0.0</cant>
+                <filletradius>0.0</filletradius>
+                <filletmaterial type="bulk" density="170.0" group="Woods">Balsa</filletmaterial>
+                <rootchord>0.147</rootchord>
+                <tipchord>0.049</tipchord>
+                <sweeplength>0.08959591425351553</sweeplength>
+                <height>0.07</height>
+              </trapezoidfinset>
+
+              <trapezoidfinset>
+                <name>Aletas trapezoidales</name>
+                <id>28f9acbd-e15b-4b7d-963c-cb2a65f91a7b</id>
+                <instancecount>4</instancecount>
+                <fincount>4</fincount>
+                <radiusoffset method="surface">0.0</radiusoffset>
+                <angleoffset method="relative">0.0</angleoffset>
+                <rotation>0.0</rotation>
+                <axialoffset method="top">0.15</axialoffset>
+                <position type="top">0.15</position>
+                <overridemass>0.07122150000000003</overridemass>
+                <overridesubcomponentsmass>false</overridesubcomponentsmass>
+                <overridecg>0.06206666666666666</overridecg>
+                <overridesubcomponentscg>false</overridesubcomponentscg>
+                <overridecd>0.020517370915946884</overridecd>
+                <overridesubcomponentscd>false</overridesubcomponentscd>
+                <finish>normal</finish>
+                <material type="bulk" density="1250.0" group="Plastics">PLA - 100% infill</material>
+                <thickness>0.005</thickness>
+                <crosssection>airfoil</crosssection>
+                <cant>0.0</cant>
+                <filletradius>0.0</filletradius>
+                <filletmaterial type="bulk" density="170.0" group="Woods">Balsa</filletmaterial>
+                <rootchord>0.0931</rootchord>
+                <tipchord>0.0</tipchord>
+                <sweeplength>0.0931</sweeplength>
+                <height>0.07200000000000001</height>
+              </trapezoidfinset>
+
+              <masscomponent>
+                <name>Masa</name>
+                <id>5f0567e6-48cc-4006-a515-c845399320af</id>
+                <axialoffset method="top">0.14</axialoffset>
+                <position type="top">0.14</position>
+                <overridemass>0.35000000000000003</overridemass>
+                <overridesubcomponentsmass>false</overridesubcomponentsmass>
+                <overridecg>0.075</overridecg>
+                <overridesubcomponentscg>false</overridesubcomponentscg>
+                <overridecd>0.0</overridecd>
+                <overridesubcomponentscd>false</overridesubcomponentscd>
+                <packedlength>0.15</packedlength>
+                <packedradius>0.022000000000000002</packedradius>
+                <radialposition>0.0</radialposition>
+                <radialdirection>0.0</radialdirection>
+                <mass>0.35000000000000003</mass>
+                <masscomponenttype>flightcomputer</masscomponenttype>
+              </masscomponent>
+
+              <parachute>
+                <name>Paracaídas</name>
+                <id>45717d58-718d-4bb9-a3d2-b75a36412b99</id>
+                <axialoffset method="top">0.02</axialoffset>
+                <position type="top">0.02</position>
+                <overridemass>0.020355419236907257</overridemass>
+                <overridesubcomponentsmass>false</overridesubcomponentsmass>
+                <overridecg>0.0125</overridecg>
+                <overridesubcomponentscg>false</overridesubcomponentscg>
+                <overridecd>0.0</overridecd>
+                <overridesubcomponentscd>false</overridesubcomponentscd>
+                <packedlength>0.1</packedlength>
+                <packedradius>0.02</packedradius>
+                <radialposition>0.0</radialposition>
+                <radialdirection>0.0</radialdirection>
+                <cd>auto</cd>
+                <material type="surface" density="0.067" group="Fabrics">Ripstop nylon</material>
+                <deployevent>ejection</deployevent>
+                <deployaltitude>200.0</deployaltitude>
+                <deploydelay>0.0</deploydelay>
+                <diameter>0.5</diameter>
+                <linecount>10</linecount>
+                <linelength>0.4</linelength>
+                <linematerial type="line" density="0.0018" group="ThreadsLines">Elastic cord (round 2 mm, 1/16 in)</linematerial>
+              </parachute>
+
+              <engineblock>
+                <name>Retén de motor</name>
+                <id>28cc88c0-4635-461b-97df-08a05e86360f</id>
+                <axialoffset method="bottom">0.0</axialoffset>
+                <position type="bottom">0.0</position>
+                <overridemass>0.06582264927801336</overridemass>
+                <overridesubcomponentsmass>false</overridesubcomponentsmass>
+                <overridecg>0.0125</overridecg>
+                <overridesubcomponentscg>false</overridesubcomponentscg>
+                <material type="bulk" density="2700.0" group="Metals">Aluminum</material>
+                <length>0.025</length>
+                <radialposition>0.0</radialposition>
+                <radialdirection>0.0</radialdirection>
+                <outerradius>auto</outerradius>
+                <thickness>0.008</thickness>
+              </engineblock>
+            </subcomponents>
+          </bodytube>
+        </subcomponents>
+      </stage>
+    </subcomponents>
+  </rocket>
+
+  <simulations>
+    <simulation status="notsimulated">
+      <name>Simulation 1</name>
+      <simulator>RK4Simulator</simulator>
+      <calculator>BarrowmanCalculator</calculator>
+      <conditions>
+        <configid>aa6aa33d-93ed-4a10-8a80-80ed48442279</configid>
+        <launchrodlength>1.0</launchrodlength>
+        <launchintowind>true</launchintowind>
+        <launchrodangle>0.0</launchrodangle>
+        <launchroddirection>90.0</launchroddirection>
+        <windaverage>2.0</windaverage>
+        <windturbulence>0.1</windturbulence>
+        <winddirection>1.5707963267948966</winddirection>
+        <wind model="average">
+          <speed>2.0</speed>
+          <direction>1.5707963267948966</direction>
+          <standarddeviation>0.2</standarddeviation>
+        </wind>
+        <wind model="multilevel" altituderef="msl">
+          <windlevel altitude="0.0" speed="2.0" direction="1.5707963267948966" standarddeviation="0.2"/>
+        </wind>
+        <windmodeltype>Average</windmodeltype>
+        <launchaltitude>0.0</launchaltitude>
+        <launchlatitude>28.61</launchlatitude>
+        <launchlongitude>-80.6</launchlongitude>
+        <geodeticmethod>spherical</geodeticmethod>
+        <atmosphere model="isa"/>
+        <timestep>0.05</timestep>
+        <maxtime>1200.0</maxtime>
+      </conditions>
+      <flightdata maxaltitude="669.764" maxvelocity="141.863" maxacceleration="109.281" maxmach="0.418" timetoapogee="11.206" flighttime="72.183" groundhitvelocity="10.265" launchrodvelocity="14.282" deploymentvelocity="39.219" optimumdelay="9.563">
+        <warning type="HighSpeedDeployment">
+          <id>601b3023-6d1e-49ac-afff-bd8ea9a93f1e</id>
+          <description>Despliegue del sistema de recuperación con velocidad alta (39.2 m/s)</description>
+          <priority>NORMAL</priority>
+          <source>45717d58-718d-4bb9-a3d2-b75a36412b99</source>
+          <parameter>39.23113225462036</parameter>
+          Despliegue del sistema de recuperación con velocidad alta (39.2 m/s):  &quot;Paracaídas&quot;
+        </warning>
+      </flightdata>
+    </simulation>
+  </simulations>
+  <photostudio>
+  </photostudio>
+  <docprefs>
+  </docprefs>
+</openrocket>

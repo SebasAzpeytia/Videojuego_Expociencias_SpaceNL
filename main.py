@@ -320,6 +320,20 @@ async def _ws_handler(ws):
         elif action == "ping":
             await ws.send(json.dumps({"action": "pong"}))
 
+        # ── load default ork ────────────────────────────────────────────
+        elif action == "load_default_ork":
+            ork_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src", "rocket-model", "rocket.ork")
+            if os.path.exists(ork_path):
+                with open(ork_path, "rb") as f:
+                    ork_data = base64.b64encode(f.read()).decode("utf-8")
+                geo = await asyncio.to_thread(parse_ork_file, ork_data)
+                await ws.send(json.dumps({
+                    "action": "ork_parsed",
+                    "ork_geo": geo,
+                    "ork_file": ork_data,
+                    "default_loaded": True
+                }))
+
 
 async def _run_ws():
     async with websockets.serve(_ws_handler, "127.0.0.1", WS_PORT):
@@ -355,7 +369,7 @@ def main():
             width=1320, height=840,
             resizable=True, min_size=(1024, 700),
         )
-        webview.start(debug="--debug" in sys.argv)
+        webview.start(gui='qt', debug="--debug" in sys.argv)
     else:
         if not use_browser:
             print("[INFO] pywebview no instalado – abriendo en navegador.")

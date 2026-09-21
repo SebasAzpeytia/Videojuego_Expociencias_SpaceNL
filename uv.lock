@@ -1163,7 +1163,7 @@ wheels = [
 [[package]]
 name = "videojuego-expociencias-spacenl"
 version = "0.1.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "mediapipe" },
     { name = "opencv-python" },
