@@ -18,18 +18,6 @@ class RocketSimulator:
     """2-D rotational–dynamics model of a sounding rocket subject to
     lateral wind gusts (weathercocking) and human/PID corrective torque."""
 
-    # ── Rocket physical properties ──────────────────────────────────────
-    MASS = 50.0          # kg
-    LENGTH = 3.0         # m
-    I = (1 / 12) * MASS * LENGTH ** 2  # moment of inertia (thin rod)
-    CD = 0.75            # drag coefficient
-    A_CROSS = 0.10       # reference cross-section area  (m²)
-    L_CP = 0.50          # CG → CP distance              (m)
-    ASCENT_RATE = 80.0   # vertical velocity              (m/s)
-
-    # ── Tunables ────────────────────────────────────────────────────────
-    DAMPING = 0.40       # angular-velocity damping coeff
-    K_USER = 1.5         # user-control gain (Nm / rad)
     RHO = 1.225          # air density (kg/m³)
 
     # ── Wind model ──────────────────────────────────────────────────────
@@ -65,7 +53,7 @@ class RocketSimulator:
         self.a_cross = self.width * self.length
         self.a_frontal = math.pi * (self.width / 2.0)**2
         self.cd = 0.75
-        self.ascent_rate = 80.0
+        self.ascent_rate = 0.0
 
         # State
         self.angle = 0.0              # rad (deviation from vertical)
@@ -88,9 +76,9 @@ class RocketSimulator:
         # CFD
         self.cfd_enabled = HAS_CFD
         if self.cfd_enabled:
-            self.cfd_nx = 60
-            self.cfd_ny = 60
-            self.cfd = LBMSolver(self.cfd_nx, self.cfd_ny, nu=0.01)
+            self.cfd_nx = 48
+            self.cfd_ny = 48
+            self.cfd = LBMSolver(self.cfd_nx, self.cfd_ny, nu=0.05)
             self.last_cfd_angle = 999.0
             
     def _update_cfd_obstacle(self):
@@ -116,10 +104,10 @@ class RocketSimulator:
                 dx = x - cx
                 dy = y - cy
                 
-                # px, py are local coordinates in pixels (1 cell = 6 pixels)
+                # px, py are local coordinates in pixels (1 cell = 10 pixels)
                 # aligned with the rocket's longitudinal axis
-                px = (dx * c + dy * s) * 6.0
-                py = (-dx * s + dy * c) * 6.0
+                px = (dx * c + dy * s) * 10.0
+                py = (-dx * s + dy * c) * 10.0
                 
                 in_body = False
                 if -80.0 <= py <= 56.0:
@@ -357,13 +345,13 @@ class RocketSimulator:
             v_in = 0.15 if self.vertical_velocity >= 0 else -0.15
             ux, uy = self.cfd.step(u_inlet=u_in, v_inlet=v_in)
             
-            # Send the full 60x60 grid
+            # Send the full grid
             if int(self.time / dt) % 3 == 0:
-                ux_down = ux.flatten().tolist()
-                uy_down = uy.flatten().tolist()
+                ux_down = np.round(ux, 3).flatten().tolist()
+                uy_down = np.round(uy, 3).flatten().tolist()
                 cfd_grid = {
-                    "ux": [round(v, 3) for v in ux_down],
-                    "uy": [round(v, 3) for v in uy_down]
+                    "ux": ux_down,
+                    "uy": uy_down
                 }
 
         state_dict: dict[str, Any] = dict(
@@ -378,7 +366,8 @@ class RocketSimulator:
             user_angle=round(user_clamped, 1),
             time=round(self.time, 2),
             candy=round(self.candy, 2),
-            mass=round(current_mass, 1)
+            mass=round(current_mass, 1),
+            velocity=round(self.vertical_velocity, 1)
         )
         
         if cfd_grid:
@@ -413,7 +402,7 @@ class RocketSimulator:
         t = 0.0
         w_idx = 0
         sample = 0
-        self.candy = getattr(self, 'initial_candy', 10.0) # Reset fuel for simulation
+        sim_candy = getattr(self, 'initial_candy', 10.0) # Reset fuel for simulation
 
         # run until rocket lands or a maximum time to prevent infinite loops
         while (alt > 0 or t < 1.0) and t < 60.0:
@@ -481,11 +470,11 @@ class RocketSimulator:
             
             burn_rate = 0.125
             thrust = 0.0
-            if getattr(self, 'candy', 0) > 0:
-                self.candy -= burn_rate * dt
+            if sim_candy > 0:
+                sim_candy -= burn_rate * dt
                 thrust = 138.56
-                if self.candy < 0:
-                    self.candy = 0.0
+                if sim_candy < 0:
+                    sim_candy = 0.0
                     
             # 2D Kinematics
             thrust_y = thrust * math.cos(angle)
@@ -525,7 +514,8 @@ class RocketSimulator:
                     altitude=round(alt, 2),
                     lateral_pos=round(lat, 3),
                     user_angle=round(canard_cmd, 2),
-                    candy=round(self.candy, 2)
+                    candy=round(sim_candy, 2),
+                    velocity=round(v_vel, 1)
                 ))
 
         return traj

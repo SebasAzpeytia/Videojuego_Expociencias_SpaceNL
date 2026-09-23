@@ -1,7 +1,7 @@
 import numpy as np
 
 class LBMSolver:
-    def __init__(self, nx, ny, nu=0.01):
+    def __init__(self, nx, ny, nu=0.05): # Increased viscosity for stability
         self.nx = nx
         self.ny = ny
         self.nu = nu
@@ -43,14 +43,17 @@ class LBMSolver:
         ux = np.sum(self.F * self.cxs, axis=2) / rho
         uy = np.sum(self.F * self.cys, axis=2) / rho
         
-        # Apply inlet boundary conditions (top wall)
-        ux[0, :] = u_inlet
-        uy[0, :] = v_inlet
+        # Apply inlet boundary conditions
+        if v_inlet >= 0:
+            ux[0, :] = u_inlet
+            uy[0, :] = v_inlet
+        else:
+            ux[-1, :] = u_inlet
+            uy[-1, :] = v_inlet
         
         # Clamp velocity to stay within LBM stability limits (Mach < ~0.3)
         ux = np.clip(ux, -0.2, 0.2)
         uy = np.clip(uy, -0.2, 0.2)
-        # Also top/bottom walls open or slip? Let's just wrap around since we used np.roll
         
         # Apply obstacle
         ux[self.obstacle] = 0
@@ -63,6 +66,12 @@ class LBMSolver:
             Feq[:, :, i] = rho * w * (1 + cu + 0.5 * cu**2 - 1.5 * (ux**2 + uy**2))
             
         self.F += -self.omega * (self.F - Feq)
+        
+        # Force equilibrium at the inlet to destroy wrapped-around wake
+        if v_inlet >= 0:
+            self.F[0, :, :] = Feq[0, :, :]
+        else:
+            self.F[-1, :, :] = Feq[-1, :, :]
         
         # Re-apply bounce back
         self.F[self.obstacle, :] = bndryF

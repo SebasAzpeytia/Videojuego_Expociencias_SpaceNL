@@ -35,7 +35,7 @@ from physics_engine import RocketSimulator
 from camera_processor import CameraProcessor
 
 # ── configuration ───────────────────────────────────────────────────────
-WS_PORT       = 8765
+WS_PORT       = 8766
 WEB_DIR       = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 GAME_DURATION = 15.0
 
@@ -196,6 +196,22 @@ def parse_ork_file(base64_data):
 
 async def _ws_handler(ws):
     global _sim, _active, _tick, _use_cam
+    
+    # Check and send default ORK if exists
+    default_ork_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "default.ork")
+    if os.path.exists(default_ork_path):
+        try:
+            with open(default_ork_path, "rb") as f:
+                ork_data = base64.b64encode(f.read()).decode('utf-8')
+                geo = await asyncio.to_thread(parse_ork_file, ork_data)
+                if geo:
+                    await ws.send(json.dumps({
+                        "action": "default_ork_loaded",
+                        "ork_geo": geo,
+                        "ork_file": ork_data
+                    }))
+        except Exception as e:
+            print(f"Failed to load default.ork: {e}")
 
     async for raw in ws:
         msg = json.loads(raw)
@@ -270,8 +286,7 @@ async def _ws_handler(ws):
             
             crashed = False
             if getattr(_sim, 'crash_enabled', True):
-                if _sim.vertical_velocity >= 0:
-                    crashed = abs(math.degrees(_sim.angle)) >= _sim.crash_angle
+                crashed = abs(math.degrees(_sim.angle)) >= _sim.crash_angle
 
             hit_ground = _sim.altitude <= 0.0 and _sim.time > 1.0
             if hit_ground:

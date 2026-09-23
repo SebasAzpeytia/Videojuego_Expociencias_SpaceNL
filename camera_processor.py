@@ -47,13 +47,19 @@ class CameraProcessor:
     # ── lifecycle ────────────────────────────────────────────────────
     def start(self) -> bool:
         """Open the default webcam and launch the processing thread."""
+        with self._lock:
+            if self._running:
+                return True
+
         try:
-            self._cap = cv2.VideoCapture(0)
-            if not self._cap.isOpened():
+            cap = cv2.VideoCapture(0)
+            if not cap.isOpened():
                 return False
-            self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._CAP_W)
-            self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._CAP_H)
-            self._cap.set(cv2.CAP_PROP_FPS, 30)
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._CAP_W)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._CAP_H)
+            cap.set(cv2.CAP_PROP_FPS, 30)
+            
+            self._cap = cap
             self._running = True
             threading.Thread(target=self._loop, daemon=True).start()
             return True
@@ -62,11 +68,14 @@ class CameraProcessor:
 
     def stop(self):
         self._running = False
-        if self._cap:
-            self._cap.release()
+        # We don't release self._cap here to avoid thread-crash with OpenCV.
+        # It is released safely at the end of _loop().
 
     # ── main loop (runs in daemon thread) ────────────────────────────
     def _loop(self):
+        if self._cap is None:
+            return
+            
         n = 0
         while self._running:
             ok, frame = self._cap.read()
@@ -79,9 +88,12 @@ class CameraProcessor:
             results = self._pose.process(rgb)
 
             angle = 0.0
-            if results.pose_landmarks:
-                self.active = True
-                lms = results.pose_landmarks.landmark
+            pose_landmarks = getattr(results, 'pose_landmarks', None)
+            is_active = False
+
+            if pose_landmarks:
+                is_active = True
+                lms = pose_landmarks.landmark
                 lsh, rsh = lms[11], lms[12]          # left / right shoulder
                 dy = rsh.y - lsh.y
                 dx = rsh.x - lsh.x
@@ -99,8 +111,8 @@ class CameraProcessor:
                 # Draw skeleton on the BGR frame for PiP
                 self._mp_draw.draw_landmarks(
                     frame,
-                    results.pose_landmarks,
-                    self._mp_pose_mod.POSE_CONNECTIONS,
+                    pose_landmarks,
+                    list(self._mp_pose_mod.POSE_CONNECTIONS),
                     landmark_drawing_spec=self._mp_draw.DrawingSpec(
                         color=(0, 255, 136), thickness=1, circle_radius=2,
                     ),
@@ -111,6 +123,7 @@ class CameraProcessor:
 
             with self._lock:
                 self.user_angle = angle
+                self.active = is_active
 
             # Encode annotated frame every N captures → ~10 FPS PiP
             n += 1
@@ -122,6 +135,11 @@ class CameraProcessor:
                 )
                 with self._lock:
                     self.frame_b64 = base64.b64encode(buf.tobytes()).decode("ascii")
+
+        # Safely release the camera when the loop terminates
+        if self._cap:
+            self._cap.release()
+            self._cap = None
 
     # ── thread-safe accessors ────────────────────────────────────────
     def get_angle(self) -> float:

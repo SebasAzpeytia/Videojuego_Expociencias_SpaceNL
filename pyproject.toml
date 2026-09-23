@@ -20,6 +20,8 @@ dependencies = [
 [tool.pyright]
 include = ["."]
 extraPaths = ["."]
+venvPath = "."
+venv = ".venv"
 executionEnvironments = [
   { root = "." }
 ]

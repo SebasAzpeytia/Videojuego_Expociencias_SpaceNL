@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,6 +11,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
+
 <body>
 
   <!-- ═══════════ SPLASH / START ═══════════ -->
@@ -26,8 +28,9 @@
       </div>
 
       <div style="margin-bottom: 20px;">
-        <label style="color: var(--text); font-size: 1.1em; letter-spacing: 1px;">MODO DE CONTROL: 
-          <select id="input-mode-select" style="background: rgba(0,0,0,0.6); border: 1px solid var(--border); color: var(--text); padding: 8px; border-radius: 4px; font-family: inherit; margin-left: 10px; font-size: 0.9em;">
+        <label style="color: var(--text); font-size: 1.1em; letter-spacing: 1px;">MODO DE CONTROL:
+          <select id="input-mode-select"
+            style="background: rgba(0,0,0,0.6); border: 1px solid var(--border); color: var(--text); padding: 8px; border-radius: 4px; font-family: inherit; margin-left: 10px; font-size: 0.9em;">
             <option value="camera" selected>CÁMARA (Cuerpo)</option>
             <option value="keyboard">TECLADO (Flechas)</option>
           </select>
@@ -56,7 +59,7 @@
     <div class="scanlines"></div>
     <div class="config-content">
       <h2 class="title-glow">PARÁMETROS DE LA MISIÓN</h2>
-      
+
       <div class="config-grid">
         <div class="config-section">
           <h3>🚀 Especificaciones</h3>
@@ -69,23 +72,27 @@
             <div id="file-name" class="file-name">Usando modelo por defecto</div>
           </div>
           <div id="config-visualizer" style="text-align: center; margin-bottom: 15px;">
-            <canvas id="config-rocket-canvas" width="250" height="250" style="background: rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 8px;"></canvas>
+            <canvas id="config-rocket-canvas" width="250" height="250"
+              style="background: rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 8px;"></canvas>
           </div>
           <label>Masa Total (kg) <input type="number" id="conf-mass" value="0.4" step="0.1"></label>
           <label>Altura (m) <input type="number" id="conf-height" value="3.0" step="0.1"></label>
           <label>Anchura (m) <input type="number" id="conf-width" value="0.2" step="0.05"></label>
           <label>Combustible Candy (kg) <input type="number" id="conf-candy" value="0.250" step="0.01"></label>
-          <label>Multiplicador Inercia <input type="number" id="conf-inertia-mult" value="8.0" step="0.5" title="Aumenta la resistencia a rotar"></label>
-          <label>Amortiguación Rot. <input type="number" id="conf-damping" value="0.8" step="0.05" title="Fricción que detiene el giro"></label>
-          <label style="margin-top: 10px;">Perfil NACA Canards 
-            <select id="conf-naca" style="background: rgba(0,0,0,0.4); border: 1px solid var(--border); color: var(--text); padding: 5px; border-radius: 4px;">
+          <label>Multiplicador Inercia <input type="number" id="conf-inertia-mult" value="8.0" step="0.5"
+              title="Aumenta la resistencia a rotar"></label>
+          <label>Amortiguación Rot. <input type="number" id="conf-damping" value="0.8" step="0.05"
+              title="Fricción que detiene el giro"></label>
+          <label style="margin-top: 10px;">Perfil NACA Canards
+            <select id="conf-naca"
+              style="background: rgba(0,0,0,0.4); border: 1px solid var(--border); color: var(--text); padding: 5px; border-radius: 4px;">
               <option value="0012">NACA 0012 (Simétrico Delgado)</option>
               <option value="0018">NACA 0018 (Simétrico Grueso)</option>
               <option value="66-212" selected>NACA 66-212 (Asimétrico/Camber)</option>
             </select>
           </label>
         </div>
-        
+
         <div class="config-section">
           <h3>🎮 Control & Entorno</h3>
           <label>Ángulo Max Canards (°) <input type="number" id="conf-angle" value="20.0" step="1"></label>
@@ -93,7 +100,8 @@
             <label style="margin: 0;">Activar Umbral Crítico</label>
             <input type="checkbox" id="conf-crash-enabled" checked style="width: auto;">
           </div>
-          <label id="conf-crash-label">Umbral Crítico (°) <input type="number" id="conf-crash" value="45.0" step="1"></label>
+          <label id="conf-crash-label">Umbral Crítico (°) <input type="number" id="conf-crash" value="45.0"
+              step="1"></label>
           <label>Distancia Mín. Objetivo (m) <input type="number" id="conf-target-min" value="100" step="10"></label>
           <label>Distancia Máx. Objetivo (m) <input type="number" id="conf-target-max" value="300" step="10"></label>
           <label>Ubicación Real</label>
@@ -118,9 +126,23 @@
   </div>
 
   <!-- ═══════════ COUNTDOWN OVERLAY ═══════════ -->
-  <div id="replay-overlay" class="overlay hidden" style="z-index: 50; flex-direction: column; background: rgba(0,20,40,0.85); backdrop-filter: blur(10px);">
-    <h1 style="color: #00d4ff; text-shadow: 0 0 20px #00d4ff; text-align: center; font-size: 2.5rem; letter-spacing: 2px;">INICIANDO SIMULACIÓN PID</h1>
-    <p style="color: white; margin-top: 15px; font-size: 1.2rem; opacity: 0.9;">Analizando respuesta de vuelo automatizada...</p>
+  <div id="replay-overlay" class="hidden"
+    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; z-index: 50; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,20,40,0.85); backdrop-filter: blur(10px);">
+    <h1
+      style="color: #00d4ff; text-shadow: 0 0 20px #00d4ff; text-align: center; font-size: 2.5rem; letter-spacing: 2px;">
+      INICIANDO SIMULACIÓN PID</h1>
+    <p style="color: white; margin-top: 15px; font-size: 1.2rem; opacity: 0.9;">Analizando respuesta de vuelo
+      automatizada...</p>
+  </div>
+
+  <div id="landing-overlay" class="hidden"
+    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; z-index: 60; flex-direction: column; align-items: center; justify-content: center; background: rgba(10, 10, 15, 0.9); backdrop-filter: blur(10px);">
+    <h1 id="landing-title" style="text-align: center; font-size: 4rem; letter-spacing: 3px; font-weight: bold;">
+      RESULTADO
+    </h1>
+    <p id="landing-subtitle" style="color: white; margin-top: 20px; font-size: 2rem; opacity: 0.9; text-align: center; max-width: 80%; padding: 0 20px;">
+      Distancia al objetivo: --
+    </p>
   </div>
 
   <div id="countdown-overlay" class="screen">
@@ -135,6 +157,7 @@
     <div id="game-ui-overlay">
       <div>
         <button id="btn-pause" class="btn-pause">⏸ PAUSA (Espacio)</button>
+        <button id="btn-skip" class="btn-pause" style="margin-left: 10px; display: none; background: #ffaa00; color: #000;">⏭ SALTAR (S)</button>
         <button id="btn-restart-game" class="btn-pause" style="margin-left: 10px;">🔄 REINICIAR</button>
       </div>
       <div id="warning-banner" class="warning-banner hidden">¡ADVERTENCIA! INCLINACIÓN CRÍTICA</div>
@@ -189,6 +212,10 @@
         <label>VIENTO (km/h)</label>
         <span id="hud-windspeed" class="hud-value">0.0</span>
       </div>
+      <div class="hud-item">
+        <label>MASA TOTAL</label>
+        <span id="hud-mass" class="hud-value">0.0 kg</span>
+      </div>
     </div>
 
     <!-- Camera PiP — receives base64 JPEG from backend -->
@@ -226,8 +253,11 @@
             <div class="stat"><label>σ Dispersión</label><span id="stat-h-std">—</span></div>
           </div>
           <div class="target-result">
-            <span class="metric-label" style="display:block; text-align:center; color:#88aacc; font-size: 0.8rem; letter-spacing:0.1em; margin-bottom:5px;">Distancia al Objetivo</span>
-            <span id="h-dist" class="metric-val" style="display:block; text-align:center; color: #ff6600; font-size: 1.5rem; font-weight:700;">0.0 m</span>
+            <span class="metric-label"
+              style="display:block; text-align:center; color:#88aacc; font-size: 0.8rem; letter-spacing:0.1em; margin-bottom:5px;">Distancia
+              al Objetivo</span>
+            <span id="h-dist" class="metric-val"
+              style="display:block; text-align:center; color: #ff6600; font-size: 1.5rem; font-weight:700;">0.0 m</span>
           </div>
         </div>
 
@@ -251,8 +281,11 @@
             <div class="stat"><label>σ Dispersión</label><span id="stat-p-std">—</span></div>
           </div>
           <div class="target-result">
-            <span class="metric-label" style="display:block; text-align:center; color:#88aacc; font-size: 0.8rem; letter-spacing:0.1em; margin-bottom:5px;">Distancia al Objetivo</span>
-            <span id="p-dist" class="metric-val" style="display:block; text-align:center; color: #00ff88; font-size: 1.5rem; font-weight:700;">0.0 m</span>
+            <span class="metric-label"
+              style="display:block; text-align:center; color:#88aacc; font-size: 0.8rem; letter-spacing:0.1em; margin-bottom:5px;">Distancia
+              al Objetivo</span>
+            <span id="p-dist" class="metric-val"
+              style="display:block; text-align:center; color: #00ff88; font-size: 1.5rem; font-weight:700;">0.0 m</span>
           </div>
         </div>
       </div>
@@ -274,4 +307,5 @@
   <!-- All vision runs in Python backend — no CDN scripts needed -->
   <script src="app.js"></script>
 </body>
+
 </html>
