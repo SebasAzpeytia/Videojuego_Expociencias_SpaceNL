@@ -474,16 +474,50 @@ function initThreeJS() {
   scene.add(rocketGroup);
 
   // CFD Particles
-  const pCount = 1500;
+  const pCount = 8000;
   const pGeo = new THREE.BufferGeometry();
   const pPos = new Float32Array(pCount * 3);
+  const pCol = new Float32Array(pCount * 3);
+  
+  // Create a circular texture for particles
+  const texCanvas = document.createElement('canvas');
+  texCanvas.width = 64; texCanvas.height = 64;
+  const texCtx = texCanvas.getContext('2d');
+  texCtx.beginPath();
+  texCtx.arc(32, 32, 30, 0, Math.PI * 2);
+  texCtx.fillStyle = '#ffffff';
+  texCtx.fill();
+  
+  // Radial gradient for soft edges
+  const gradient = texCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gradient.addColorStop(0, 'rgba(255,255,255,1)');
+  gradient.addColorStop(1, 'rgba(255,255,255,0)');
+  texCtx.fillStyle = gradient;
+  texCtx.fillRect(0,0,64,64);
+  const pTex = new THREE.CanvasTexture(texCanvas);
+
   for (let i=0; i<pCount; i++) {
-    pPos[i*3] = (Math.random() - 0.5) * 12;
-    pPos[i*3+1] = (Math.random() - 0.5) * 24;
-    pPos[i*3+2] = (Math.random() - 0.5) * 6;
+    let angle = Math.random() * Math.PI * 2;
+    let radius = Math.random() * 8; // Spread up to 8 units radially
+    pPos[i*3] = Math.cos(angle) * radius;
+    pPos[i*3+1] = (Math.random() - 0.5) * 24; // Y from -12 to 12
+    pPos[i*3+2] = Math.sin(angle) * radius;
+    
+    // Default blue color
+    pCol[i*3] = 0; pCol[i*3+1] = 0.8; pCol[i*3+2] = 1.0;
   }
   pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
-  const pMat = new THREE.PointsMaterial({ color: 0x00d4ff, size: 0.12, transparent: true, opacity: 0.8 });
+  pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
+  
+  const pMat = new THREE.PointsMaterial({ 
+    size: 0.25, 
+    map: pTex,
+    transparent: true, 
+    opacity: 0.6,
+    vertexColors: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
   cfdParticleSystem = new THREE.Points(pGeo, pMat);
   scene.add(cfdParticleSystem);
 
@@ -643,6 +677,7 @@ function renderGame() {
 
   if (cfdParticleSystem) {
     const positions = cfdParticleSystem.geometry.attributes.position.array;
+    const colors = cfdParticleSystem.geometry.attributes.color.array;
     let hasCFD = (rocket.cfd && rocket.cfd.ux && rocket.cfd.ux.length > 0);
     let nx = 0, ny = 0;
     if (hasCFD) {
@@ -650,75 +685,98 @@ function renderGame() {
       ny = nx;
     }
     
-    const baseFallSpeed = rocket.isFalling ? -0.2 : 0.6;
+    const baseFallSpeed = rocket.isFalling ? -0.2 : 0.8;
     
-    for (let i=0; i<1500; i++) {
+    for (let i=0; i<8000; i++) {
       let px = positions[i*3];
       let py = positions[i*3+1];
+      let pz = positions[i*3+2];
       
-      let vx = rocket.windForce * 0.05;
+      let vx = 0;
       let vy = -baseFallSpeed;
+      let vz = 0;
+      
+      let r = Math.sqrt(px*px + pz*pz);
       
       if (hasCFD) {
-        let pz = positions[i*3+2];
-        // Calculate radial distance from center axis for 3D symmetry
-        let r = Math.sqrt(px*px + pz*pz);
-        
-        // Python CFD grid covers 480 units. Three.js rocket is ~7.8 units.
         const gridSize = 28.0;
-        
-        // Map the radial distance to the right-half of the 2D CFD grid
-        // nx/2 is the center. We map r to the right side.
         let gx = Math.floor((r / (gridSize/2)) * (nx/2) + nx / 2);
-        // Python Y is inverted relative to Three.js Y
         let gy = Math.floor((-py / gridSize) * ny + ny / 2);
         
         if (gx >= 0 && gx < nx && gy >= 0 && gy < ny) {
           const idx = gy * nx + gx;
-          let lx = rocket.cfd.ux[idx]; // Radial velocity in 2D slice
-          let ly = rocket.cfd.uy[idx]; // Vertical velocity
+          let lx = rocket.cfd.ux[idx]; 
+          let ly = rocket.cfd.uy[idx]; 
           
           let radialV = lx * 20;
           vy = ly * 20; 
           
-          // Apply radial velocity out to 3D X and Z components
           let dirX = (r > 0) ? (px / r) : 1;
           let dirZ = (r > 0) ? (pz / r) : 0;
           
           vx = radialV * dirX;
-          let vz = radialV * dirZ;
+          vz = radialV * dirZ;
           
-          // Prevent particles from getting stuck inside the obstacle
+          // Add organic noise so it looks like a fluid
+          vx += (Math.random() - 0.5) * 0.1;
+          vz += (Math.random() - 0.5) * 0.1;
+          
           if (Math.abs(radialV) < 0.05 && Math.abs(vy) < 0.1) {
-            vx += (Math.random() - 0.5) * 0.2;
-            vz += (Math.random() - 0.5) * 0.2;
+            vx += (Math.random() - 0.5) * 0.3;
+            vz += (Math.random() - 0.5) * 0.3;
             vy = -baseFallSpeed;
           }
-          
-          positions[i*3+2] += vz; // Update Z position
+        } else {
+           // Outside LBM grid, add slight wind shear
+           vx = rocket.windForce * 0.02 * (Math.random()-0.5);
         }
       }
       
       positions[i*3] += vx;
       positions[i*3+1] += vy;
+      positions[i*3+2] += vz;
       
-      // Reset logic (wrap around a cylinder volume)
+      // Color interpolation based on radial distance
+      // Close to rocket (r < 1.5) -> Hot (Yellow/White)
+      // Mid distance (r < 4) -> Cyan
+      // Far (r >= 4) -> Blue
+      let colR = 0.0, colG = 0.5, colB = 1.0;
+      if (r < 1.5) {
+         let t = r / 1.5;
+         colR = 1.0; 
+         colG = 0.5 + 0.5 * (1-t); // yellow to white
+         colB = t;
+      } else if (r < 4.0) {
+         let t = (r - 1.5) / 2.5;
+         colR = 1.0 - t; // yellow to cyan
+         colG = 1.0;
+         colB = 1.0;
+      } else {
+         let t = Math.min((r - 4.0) / 4.0, 1.0);
+         colR = 0;
+         colG = 1.0 - 0.5 * t; // cyan to blue
+         colB = 1.0;
+      }
+      
+      // Fade out if moving very slow or very fast (optional)
+      colors[i*3] = colR;
+      colors[i*3+1] = colG;
+      colors[i*3+2] = colB;
+      
+      // Reset logic (Continuous stream from top)
       if (positions[i*3+1] < -12) {
-        positions[i*3+1] = 12;
+        positions[i*3+1] = 12; // spawn at the top
         let angle = Math.random() * Math.PI * 2;
-        let radius = Math.random() * 6; // Spawn in a circle of radius 6
+        // concentrate more particles near the center
+        let radius = Math.pow(Math.random(), 1.5) * 8; 
         positions[i*3] = Math.cos(angle) * radius;
         positions[i*3+2] = Math.sin(angle) * radius;
       }
-      if (positions[i*3+1] > 12) {
-        positions[i*3+1] = -12;
-        let angle = Math.random() * Math.PI * 2;
-        let radius = Math.random() * 6;
-        positions[i*3] = Math.cos(angle) * radius;
-        positions[i*3+2] = Math.sin(angle) * radius;
-      }
+      // Safety bounds
+      if (positions[i*3+1] > 12) positions[i*3+1] = -12;
     }
     cfdParticleSystem.geometry.attributes.position.needsUpdate = true;
+    cfdParticleSystem.geometry.attributes.color.needsUpdate = true;
   }
   if (renderer && scene && camera) {
     renderer.render(scene, camera);
