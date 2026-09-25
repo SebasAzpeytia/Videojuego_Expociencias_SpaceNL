@@ -476,50 +476,87 @@ function initThreeJS() {
 function buildProceduralRocket() {
   const group = new THREE.Group();
   
-  const bodyGeo = new THREE.CylinderGeometry(0.4, 0.4, 4, 32);
-  const bodyMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.4 });
+  // Body (Black, long)
+  const bodyRadius = 0.3;
+  const bodyHeight = 6.0;
+  const bodyGeo = new THREE.CylinderGeometry(bodyRadius, bodyRadius, bodyHeight, 32);
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.3, metalness: 0.2 });
   const body = new THREE.Mesh(bodyGeo, bodyMat);
   group.add(body);
   
-  const noseGeo = new THREE.ConeGeometry(0.4, 1.2, 32);
-  const noseMat = new THREE.MeshStandardMaterial({ color: 0xff3333, roughness: 0.3 });
+  // Nose (Orange/Brown, pointed)
+  const noseHeight = 1.8;
+  const noseGeo = new THREE.ConeGeometry(bodyRadius, noseHeight, 32);
+  const noseMat = new THREE.MeshStandardMaterial({ color: 0xc05a20, roughness: 0.4 });
   const nose = new THREE.Mesh(noseGeo, noseMat);
-  nose.position.y = 2.6;
+  nose.position.y = bodyHeight / 2 + noseHeight / 2;
   group.add(nose);
   
-  // Fins at the bottom
-  // width along X (sticking out), height along Y, thickness along Z
-  const finGeo = new THREE.BoxGeometry(0.8, 1.0, 0.05);
-  const finMat = new THREE.MeshStandardMaterial({ color: 0x3a4455 });
+  // Create Fin Shape
+  const finShape = new THREE.Shape();
+  finShape.moveTo(0, 0);
+  finShape.lineTo(0, 1.5); // Root length
+  finShape.lineTo(1.0, 0.5); // Swept leading edge
+  finShape.lineTo(1.0, 0); // Tip length
+  finShape.lineTo(0, 0); // Flat trailing edge
+  
+  const finExtrude = { depth: 0.05, bevelEnabled: true, bevelSegments: 1, steps: 1, bevelSize: 0.02, bevelThickness: 0.02 };
+  const finGeo = new THREE.ExtrudeGeometry(finShape, finExtrude);
+  const finMat = new THREE.MeshStandardMaterial({ color: 0xf0f0ea, roughness: 0.5 }); // White/Cream
+  
   for (let i = 0; i < 4; i++) {
     const finPivot = new THREE.Group();
-    finPivot.position.y = -1.5;
-    finPivot.rotation.y = i * Math.PI / 2; // Rotate 0, 90, 180, 270 deg
+    finPivot.position.y = -bodyHeight / 2; // Bottom of body
+    finPivot.rotation.y = i * Math.PI / 2; 
     
     const fin = new THREE.Mesh(finGeo, finMat);
-    fin.position.x = 0.4 + 0.4; // body radius + half fin width
+    fin.position.x = bodyRadius - 0.05; // Slightly sink into body
+    fin.position.z = -0.025; // Center thickness
     finPivot.add(fin);
     group.add(finPivot);
   }
   
-  // Canards (4 canards near the nose)
+  // Canards (Orange, smaller swept shapes)
   canards = []; // reset
-  const canardGeo = new THREE.BoxGeometry(0.6, 0.3, 0.05); // stick out along X
-  const canardMat = new THREE.MeshStandardMaterial({ color: 0xff6600 });
+  const canardShape = new THREE.Shape();
+  canardShape.moveTo(0, 0);
+  canardShape.lineTo(0, 0.7);
+  canardShape.lineTo(0.5, 0.2);
+  canardShape.lineTo(0.5, 0);
+  canardShape.lineTo(0, 0);
+  
+  const canardExtrude = { depth: 0.04, bevelEnabled: true, bevelSegments: 1, steps: 1, bevelSize: 0.01, bevelThickness: 0.01 };
+  const canardGeo = new THREE.ExtrudeGeometry(canardShape, canardExtrude);
+  const canardMat = new THREE.MeshStandardMaterial({ color: 0xc05a20, roughness: 0.4 });
+  
   for (let i = 0; i < 4; i++) {
     const canardPivot = new THREE.Group();
-    canardPivot.position.y = 1.5; 
+    // Positioned near the upper part of the body
+    canardPivot.position.y = bodyHeight / 2 - 1.2; 
     canardPivot.rotation.y = i * Math.PI / 2;
     
+    // The visual mesh that is attached to the pivot
     const canardMesh = new THREE.Mesh(canardGeo, canardMat);
-    canardMesh.position.x = 0.4 + 0.3; // body radius + half canard width
-    canardPivot.add(canardMesh);
+    canardMesh.position.x = bodyRadius - 0.05;
+    canardMesh.position.z = -0.02; // Center thickness
     
+    // We add the mesh to an intermediate group so the pivot is purely for pitching
+    const canardWrapper = new THREE.Group();
+    canardWrapper.add(canardMesh);
+    
+    canardPivot.add(canardWrapper);
     group.add(canardPivot);
+    
+    // Store the wrapper or pivot to animate it?
+    // Animate the pitch: local Z axis rotation for the profile?
+    // ExtrudeGeometry builds shapes on the XY plane.
+    // So the canard is flat on XY, with thickness along Z.
+    // When we rotate around X, it pitches.
     canards.push(canardPivot);
   }
   
   return group;
+}
 }
 
 function resizeCanvas() {
