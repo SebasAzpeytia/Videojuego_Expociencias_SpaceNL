@@ -55,7 +55,8 @@ const $countdown = document.getElementById("countdown-overlay");
 const $game = document.getElementById("game-screen");
 const $results = document.getElementById("results-screen");
 const $canvas = document.getElementById("rocket-canvas");
-const ctx = $canvas.getContext("2d");
+// Three.js globals
+let scene, camera, renderer, rocketGroup;
 const $camFrame = document.getElementById("camera-frame");
 const $pipPlace = document.getElementById("pip-placeholder");
 const $btnStart = document.getElementById("btn-start");
@@ -445,357 +446,80 @@ function updateHUD() {
 // ═══════════════════════════════════════════════════════════════════════
 //  CANVAS RENDERING
 // ═══════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════
+//  THREE.JS RENDERING
+// ═══════════════════════════════════════════════════════════════════════
+
+function initThreeJS() {
+  renderer = new THREE.WebGLRenderer({ canvas: $canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  
+  scene = new THREE.Scene();
+  
+  camera = new THREE.PerspectiveCamera(60, $canvas.clientWidth / $canvas.clientHeight, 0.1, 1000);
+  camera.position.z = 10;
+  camera.position.y = 0;
+  
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  scene.add(ambientLight);
+  
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  dirLight.position.set(5, 10, 5);
+  scene.add(dirLight);
+
+  rocketGroup = buildProceduralRocket();
+  scene.add(rocketGroup);
+}
+
+function buildProceduralRocket() {
+  const group = new THREE.Group();
+  
+  const bodyGeo = new THREE.CylinderGeometry(0.4, 0.4, 4, 32);
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.4 });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  group.add(body);
+  
+  const noseGeo = new THREE.ConeGeometry(0.4, 1.2, 32);
+  const noseMat = new THREE.MeshStandardMaterial({ color: 0xff3333, roughness: 0.3 });
+  const nose = new THREE.Mesh(noseGeo, noseMat);
+  nose.position.y = 2.6;
+  group.add(nose);
+  
+  const finGeo = new THREE.BoxGeometry(0.1, 1, 1.2);
+  const finMat = new THREE.MeshStandardMaterial({ color: 0x3a4455 });
+  for (let i = 0; i < 4; i++) {
+    const fin = new THREE.Mesh(finGeo, finMat);
+    fin.position.y = -1.5;
+    fin.position.x = Math.cos(i * Math.PI / 2) * 0.6;
+    fin.position.z = Math.sin(i * Math.PI / 2) * 0.6;
+    fin.rotation.y = -i * Math.PI / 2;
+    group.add(fin);
+  }
+  
+  return group;
+}
+
 function resizeCanvas() {
   $canvas.width = $canvas.clientWidth * devicePixelRatio;
   $canvas.height = $canvas.clientHeight * devicePixelRatio;
-  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  if (renderer) {
+    renderer.setSize($canvas.clientWidth, $canvas.clientHeight, false);
+    camera.aspect = $canvas.clientWidth / $canvas.clientHeight;
+    camera.updateProjectionMatrix();
+  }
 }
 window.addEventListener("resize", resizeCanvas);
 
 function renderGame() {
-  const W = $canvas.clientWidth;
-  const H = $canvas.clientHeight;
-  ctx.clearRect(0, 0, W, H);
-
-  // ── Background gradient ──────────────────────────────────────────
-  const grad = ctx.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, "#020410");
-  grad.addColorStop(0.6, "#0a0e1a");
-  grad.addColorStop(1, "#0d1220");
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W, H);
-
-  // ── Stars ────────────────────────────────────────────────────────
-  const scrollOffY = (rocket.altitude * 8.0) % H;
-  const scrollOffX = (-rocket.lateralPos * 8.0) % W;
-  for (const s of stars) {
-    const sy = ((s.y * H + scrollOffY * s.speed) % H + H) % H;
-    const sx = ((s.x * W + scrollOffX * s.speed) % W + W) % W;
-    ctx.beginPath();
-    ctx.arc(sx, sy, s.r, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(200,220,255,${s.brightness})`;
-    ctx.fill();
+  if (rocketGroup) {
+    rocketGroup.rotation.z = -(rocket.angle * Math.PI / 180);
   }
-
-  // Warning Banner Logic removed during gameplay per user request
-
-  // ── Grid lines ───────────────────────────────────────────────────
-  ctx.strokeStyle = "rgba(0,212,255,0.06)";
-  ctx.lineWidth = 1;
-  const cx = W / 2;
-  ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, H); ctx.stroke();
-  for (let i = -3; i <= 3; i++) {
-    if (i === 0) continue;
-    const x = cx + i * 80;
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  
+  if (renderer && scene && camera) {
+    renderer.render(scene, camera);
   }
-
-  // ── Rocket ───────────────────────────────────────────────────────
-  let rLen = 160, rW = 32;
-  let finSpan = 22, finRoot = 22;
-  if (currentRocketData && currentRocketData.length > 0) {
-    // Scale length down to fit screen (e.g. 160px = original length)
-    const scale = 160 / currentRocketData.length;
-    rLen = currentRocketData.length * scale || 160;
-    rW = (currentRocketData.radius * 2 * scale * 2.0) || 32;
-    finSpan = (currentRocketData.fin_span * scale * 2.5) || 22;
-    finRoot = (currentRocketData.fin_root * scale * 2.0) || 22;
-  }
-
-  const ry = H * 0.48;
-  const rx = cx;
-  let ang = (rocket.angle * Math.PI) / 180;
-
-  // ── CFD Streamlines ──────────────────────────────────────────────
-  if (rocket.cfd && rocket.cfd.ux) {
-    const totalCells = rocket.cfd.ux.length;
-    const nx = Math.round(Math.sqrt(totalCells));
-    const ny = nx; // Assuming square grid
-    
-    // 1 cell = 10 pixels (matches backend scale perfectly)
-    const gridPxX = nx * 10; 
-    const gridPxY = ny * 10; 
-    const startX = rx - gridPxX / 2;
-    const startY = ry - gridPxY / 2;
-
-    const numLinesX = 7;
-    const numLinesY = 6;
-    const steps = 30; // Max segments per line
-    const stepSize = 8; // Pixels per integration step
-
-    ctx.globalCompositeOperation = "screen";
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = "round";
-    
-    for (let ix = 0; ix < numLinesX; ix++) {
-      for (let iy = 0; iy < numLinesY; iy++) {
-        let px = startX + (gridPxX * (ix + 0.5) / numLinesX);
-        let py = startY + (gridPxY * (iy + 0.5) / numLinesY);
-      
-      let pathPoints = [{x: px, y: py}];
-      let speeds = [];
-      
-      for (let s = 0; s < steps; s++) {
-        // Find grid coordinates
-        let gx = Math.floor(((px - startX) / gridPxX) * nx);
-        let gy = Math.floor(((py - startY) / gridPxY) * ny);
-        
-        let vx = rocket.windForce * 0.2; 
-        let vy = rocket.isFalling ? -12 : 12; 
-
-        // If inside CFD grid, use CFD velocity
-        if (gx >= 0 && gx < nx && gy >= 0 && gy < ny) {
-          const idx = gy * nx + gx;
-          if (idx < rocket.cfd.ux.length) {
-            const speedFactor = 35; // Scale LBM velocity to visual speed
-            vx = rocket.cfd.ux[idx] * speedFactor;
-            vy = rocket.cfd.uy[idx] * speedFactor;
-          }
-        }
-        
-        let mag = Math.hypot(vx, vy) || 1;
-        
-        // Normalize direction and advance by stepSize
-        px += (vx / mag) * stepSize;
-        py += (vy / mag) * stepSize;
-        
-        pathPoints.push({x: px, y: py});
-        speeds.push(mag);
-        
-        // Stop tracing if we leave the grid bounds considerably
-        if (py < startY - 20 || py > startY + gridPxY + 20 || px < startX - 20 || px > startX + gridPxX + 20) {
-          break;
-        }
-      }
-      
-      // Draw the segmented line
-      for (let s = 0; s < speeds.length; s++) {
-        const p1 = pathPoints[s];
-        const p2 = pathPoints[s+1];
-        if (!p2) break;
-        
-        let distToRocket = Math.hypot(p1.x - rx, p1.y - ry);
-        let maxDist = 250; // Aproximadamente el borde del grid
-        // HSL: 0 es Rojo (cerca), 120 es Verde (lejos)
-        let hue = (distToRocket / maxDist) * 120;
-        hue = Math.max(0, Math.min(120, hue));
-
-        // Base opacity fades in at the start and fades out at the end of the line
-        let actualSteps = speeds.length;
-        let fadeIn = Math.min(1.0, s / 5.0);
-        let fadeOut = Math.min(1.0, (actualSteps - s) / 10.0);
-        let opacity = Math.min(fadeIn, fadeOut);
-        
-        // Flowing pulse animation based on segment index and time
-        // Modulates opacity in a sine wave moving along the path, but keeps a high base opacity (0.8) so it's always present
-        let wave = (Math.sin((s * stepSize + cfdDashOffset * 5) * 0.08) + 1) / 2;
-        opacity *= (0.8 + 0.2 * wave);
-        
-        ctx.strokeStyle = `hsla(${hue}, 100%, 55%, ${opacity * 0.85})`;
-        ctx.beginPath();
-        ctx.moveTo(p1.x, p1.y);
-        ctx.lineTo(p2.x, p2.y);
-        ctx.stroke();
-      }
-    }
-    }
-    
-    ctx.globalCompositeOperation = "source-over";
-  }
-
-  // ── Ground ────────────────────────────────────────────────────────
-  const groundYPos = ry + rLen / 2 + rocket.altitude * 1.5;
-  if (groundYPos < H) {
-    ctx.fillStyle = "#1a2436";
-    ctx.fillRect(0, groundYPos, W, H - groundYPos);
-    ctx.strokeStyle = "#2a3b59";
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(0, groundYPos);
-    ctx.lineTo(W, groundYPos);
-    ctx.stroke();
-
-  }
-
-  // ── Target Beacon (Faro vertical constante) ──
-  if (rocket.targetX !== undefined) {
-    const targetScreenX = W / 2 + (rocket.targetX - rocket.lateralPos) * 1.5;
-    
-    // Siempre tiene una opacidad mínima, pero brilla más al acercarse al suelo
-    let intensity = Math.max(0.2, Math.min(1, 1 - (rocket.altitude - 50) / 400));
-    
-    ctx.save();
-    
-    // 1. Haz de luz proyectado verticalmente por toda la pantalla
-    // Empieza desde el suelo o desde el fondo de la pantalla si el suelo no se ve
-    const beamBaseY = Math.min(groundYPos, H + 50); 
-    const beamTopY = 0; // Hasta arriba de la pantalla
-    
-    const beaconGradient = ctx.createLinearGradient(0, beamBaseY, 0, beamTopY);
-    // Rojo más intenso en la base, desvaneciéndose hacia arriba
-    beaconGradient.addColorStop(0, `rgba(255, 50, 50, ${intensity * 0.5})`);
-    beaconGradient.addColorStop(1, `rgba(255, 50, 50, 0.02)`);
-    
-    ctx.fillStyle = beaconGradient;
-    ctx.beginPath();
-    ctx.moveTo(targetScreenX - 40, beamBaseY);
-    ctx.lineTo(targetScreenX + 40, beamBaseY);
-    ctx.lineTo(targetScreenX + 15, beamTopY);
-    ctx.lineTo(targetScreenX - 15, beamTopY);
-    ctx.fill();
-
-    // 2. Base brillante y marca (Solo se dibujan si el suelo está dentro de la pantalla)
-    if (groundYPos <= H + 10) {
-      const timeNow = Date.now() / 150;
-      const pulse = (Math.sin(timeNow) + 1) / 2; // Oscila entre 0 y 1
-      ctx.fillStyle = `rgba(255, 30, 30, ${intensity * (0.4 + 0.6 * pulse)})`;
-      ctx.beginPath();
-      ctx.ellipse(targetScreenX, groundYPos, 60 + pulse * 15, 8, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Marca central blanca
-      ctx.fillStyle = `rgba(255, 255, 255, ${intensity})`;
-      ctx.fillRect(targetScreenX - 3, groundYPos - 3, 6, 6);
-    }
-    
-    ctx.restore();
-  }
-
-  ctx.save();
-  ctx.translate(rx, ry);
-  ctx.rotate(ang);
-
-  // Body
-  ctx.fillStyle = "#c0c8d4";
-  ctx.beginPath();
-  ctx.moveTo(-rW / 2, rLen * 0.35);
-  ctx.lineTo(-rW / 2, -rLen * 0.35);
-
-  if (currentRocketData && currentRocketData.nose_shape === "conical") {
-    ctx.lineTo(0, -rLen / 2);
-  } else {
-    // ogive or default
-    ctx.quadraticCurveTo(-rW / 2, -rLen * 0.45, 0, -rLen / 2);
-    ctx.quadraticCurveTo(rW / 2, -rLen * 0.45, rW / 2, -rLen * 0.35);
-  }
-
-  ctx.lineTo(rW / 2, -rLen * 0.35);
-  ctx.lineTo(rW / 2, rLen * 0.35);
-  ctx.closePath();
-  ctx.fill();
-
-  // Accent stripe
-  ctx.fillStyle = "#ff6600";
-  ctx.fillRect(-rW / 2 + 2, -rLen * 0.15, rW - 4, 8);
-
-  // Fins
-  ctx.fillStyle = "#3a4455";
-  ctx.beginPath();
-  ctx.moveTo(-rW / 2, rLen * 0.35);
-  ctx.lineTo(-rW / 2 - finSpan, rLen * 0.35 + 4);
-  ctx.lineTo(-rW / 2, rLen * 0.35 - finRoot);
-  ctx.closePath(); ctx.fill();
-
-  ctx.beginPath();
-  ctx.moveTo(rW / 2, rLen * 0.35);
-  ctx.lineTo(rW / 2 + finSpan, rLen * 0.35 + 4);
-  ctx.lineTo(rW / 2, rLen * 0.35 - finRoot);
-  ctx.closePath(); ctx.fill();
-
-  // Canards (Active Stabilization)
-  const canardSpan = finSpan * 0.8;
-  const canardRoot = finRoot * 0.8;
-  const canardY = -rLen * 0.15; // Placed near the nose
-  const canardAngle = (rocket.userAngle * Math.PI) / 180;
-
-  ctx.fillStyle = "#ff6600";
-  // Left canard
-  ctx.save();
-  ctx.translate(-rW / 2, canardY);
-  ctx.rotate(canardAngle);
-  ctx.beginPath();
-  ctx.moveTo(0, canardRoot / 2);
-  ctx.lineTo(-canardSpan, 2);
-  ctx.lineTo(0, -canardRoot / 2);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-
-  // Right canard
-  ctx.save();
-  ctx.translate(rW / 2, canardY);
-  ctx.rotate(canardAngle);
-  ctx.beginPath();
-  ctx.moveTo(0, canardRoot / 2);
-  ctx.lineTo(canardSpan, 2);
-  ctx.lineTo(0, -canardRoot / 2);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-
-  // Window
-  ctx.fillStyle = "#00d4ff";
-  ctx.shadowColor = "#00d4ff";
-  ctx.shadowBlur = 8;
-  ctx.beginPath();
-  ctx.arc(0, -rLen * 0.18, 5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.shadowBlur = 0;
-
-  // Exhaust flame
-  if (rocket.candy > 0) {
-    const flicker = Math.random() * 8 + 18;
-    const fg = ctx.createLinearGradient(0, rLen * 0.35, 0, rLen * 0.35 + flicker);
-    fg.addColorStop(0, "rgba(255,140,0,0.95)");
-    fg.addColorStop(0.4, "rgba(255,60,0,0.7)");
-    fg.addColorStop(1, "rgba(255,30,0,0)");
-    ctx.fillStyle = fg;
-    ctx.beginPath();
-    ctx.moveTo(-rW / 3, rLen * 0.35);
-    ctx.quadraticCurveTo(-rW / 5, rLen * 0.35 + flicker * 0.6, 0, rLen * 0.35 + flicker);
-    ctx.quadraticCurveTo(rW / 5, rLen * 0.35 + flicker * 0.6, rW / 3, rLen * 0.35);
-    ctx.closePath();
-    ctx.fill();
-
-    spawnParticle(rx, ry + rLen * 0.35, ang);
-  }
-  ctx.restore();
-
-  // Ground line for reference
-  const pxPerMeter = rLen / (confInputs.height ? parseFloat(confInputs.height.value) || 3.0 : 3.0);
-  const groundYRef = ry + rLen / 2 + rocket.altitude * pxPerMeter;
-
-  if (groundYRef < H) {
-    ctx.fillStyle = "#1a2a1a";
-    ctx.fillRect(0, groundYRef, W, H - groundYRef);
-    ctx.strokeStyle = "#4a6a4a";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0, groundYRef);
-    ctx.lineTo(W, groundYRef);
-    ctx.stroke();
-  }
-
-  // ── Particles ────────────────────────────────────────────────────
-  for (let i = particles.length - 1; i >= 0; i--) {
-    const p = particles[i];
-    p.x += p.vx; p.y += p.vy;
-    p.life -= 0.035;
-    if (p.life <= 0) { particles.splice(i, 1); continue; }
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(255,120,30,${p.life * 0.5})`;
-    ctx.fill();
-  }
-
-  // ── Drift trail ──────────────────────────────────────────────────
-  ctx.strokeStyle = "rgba(255,102,0,0.15)";
-  ctx.lineWidth = 2;
-  ctx.setLineDash([4, 6]);
-  ctx.beginPath(); ctx.moveTo(rx, ry + rLen / 2 + 20); ctx.lineTo(rx, H);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
+  
   renderMinimap();
 }
 
@@ -1273,6 +997,7 @@ function skipReplay() {
 //  INIT
 // ═══════════════════════════════════════════════════════════════════════
 function init() {
+  initThreeJS();
   resizeCanvas();
   connectWS();
 
