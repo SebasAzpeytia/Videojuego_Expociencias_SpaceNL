@@ -557,7 +557,6 @@ function buildProceduralRocket() {
   
   return group;
 }
-}
 
 function resizeCanvas() {
   $canvas.width = $canvas.clientWidth * devicePixelRatio;
