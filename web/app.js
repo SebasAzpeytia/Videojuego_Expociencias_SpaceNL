@@ -660,43 +660,63 @@ function renderGame() {
       let vy = -baseFallSpeed;
       
       if (hasCFD) {
+        let pz = positions[i*3+2];
+        // Calculate radial distance from center axis for 3D symmetry
+        let r = Math.sqrt(px*px + pz*pz);
+        
         // Python CFD grid covers 480 units. Three.js rocket is ~7.8 units.
-        // So the grid size in Three.js is about 28 units.
         const gridSize = 28.0;
-        let gx = Math.floor((px / gridSize) * nx + nx / 2);
+        
+        // Map the radial distance to the right-half of the 2D CFD grid
+        // nx/2 is the center. We map r to the right side.
+        let gx = Math.floor((r / (gridSize/2)) * (nx/2) + nx / 2);
         // Python Y is inverted relative to Three.js Y
         let gy = Math.floor((-py / gridSize) * ny + ny / 2);
         
         if (gx >= 0 && gx < nx && gy >= 0 && gy < ny) {
           const idx = gy * nx + gx;
-          let lx = rocket.cfd.ux[idx];
-          let ly = rocket.cfd.uy[idx];
+          let lx = rocket.cfd.ux[idx]; // Radial velocity in 2D slice
+          let ly = rocket.cfd.uy[idx]; // Vertical velocity
           
-          vx = lx * 20;
-          vy = ly * 20; // uy is negative in python, so vy is negative, flows nose to tail visually.
+          let radialV = lx * 20;
+          vy = ly * 20; 
           
-          // Prevent particles from getting stuck inside the obstacle (where velocity is 0)
-          if (Math.abs(vx) < 0.05 && Math.abs(vy) < 0.1) {
+          // Apply radial velocity out to 3D X and Z components
+          let dirX = (r > 0) ? (px / r) : 1;
+          let dirZ = (r > 0) ? (pz / r) : 0;
+          
+          vx = radialV * dirX;
+          let vz = radialV * dirZ;
+          
+          // Prevent particles from getting stuck inside the obstacle
+          if (Math.abs(radialV) < 0.05 && Math.abs(vy) < 0.1) {
             vx += (Math.random() - 0.5) * 0.2;
+            vz += (Math.random() - 0.5) * 0.2;
             vy = -baseFallSpeed;
           }
+          
+          positions[i*3+2] += vz; // Update Z position
         }
       }
       
       positions[i*3] += vx;
       positions[i*3+1] += vy;
       
-      // Reset logic
+      // Reset logic (wrap around a cylinder volume)
       if (positions[i*3+1] < -12) {
         positions[i*3+1] = 12;
-        positions[i*3] = (Math.random() - 0.5) * 12;
+        let angle = Math.random() * Math.PI * 2;
+        let radius = Math.random() * 6; // Spawn in a circle of radius 6
+        positions[i*3] = Math.cos(angle) * radius;
+        positions[i*3+2] = Math.sin(angle) * radius;
       }
       if (positions[i*3+1] > 12) {
         positions[i*3+1] = -12;
-        positions[i*3] = (Math.random() - 0.5) * 12;
+        let angle = Math.random() * Math.PI * 2;
+        let radius = Math.random() * 6;
+        positions[i*3] = Math.cos(angle) * radius;
+        positions[i*3+2] = Math.sin(angle) * radius;
       }
-      if (positions[i*3] > 6) positions[i*3] = -6;
-      if (positions[i*3] < -6) positions[i*3] = 6;
     }
     cfdParticleSystem.geometry.attributes.position.needsUpdate = true;
   }
