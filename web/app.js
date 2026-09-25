@@ -57,6 +57,7 @@ const $results = document.getElementById("results-screen");
 const $canvas = document.getElementById("rocket-canvas");
 // Three.js globals
 let scene, camera, renderer, rocketGroup;
+let canards = [];
 const $camFrame = document.getElementById("camera-frame");
 const $pipPlace = document.getElementById("pip-placeholder");
 const $btnStart = document.getElementById("btn-start");
@@ -497,6 +498,25 @@ function buildProceduralRocket() {
     group.add(fin);
   }
   
+  // Canards (4 canards near the nose)
+  canards = []; // reset
+  const canardGeo = new THREE.BoxGeometry(0.1, 0.4, 0.6);
+  const canardMat = new THREE.MeshStandardMaterial({ color: 0xff6600 });
+  for (let i = 0; i < 4; i++) {
+    const canardPivot = new THREE.Group();
+    canardPivot.position.y = 1.5; 
+    canardPivot.position.x = Math.cos(i * Math.PI / 2) * 0.4;
+    canardPivot.position.z = Math.sin(i * Math.PI / 2) * 0.4;
+    canardPivot.rotation.y = -i * Math.PI / 2;
+    
+    const canardMesh = new THREE.Mesh(canardGeo, canardMat);
+    canardMesh.position.z = 0.3; 
+    canardPivot.add(canardMesh);
+    
+    group.add(canardPivot);
+    canards.push(canardPivot);
+  }
+  
   return group;
 }
 
@@ -514,6 +534,17 @@ window.addEventListener("resize", resizeCanvas);
 function renderGame() {
   if (rocketGroup) {
     rocketGroup.rotation.z = -(rocket.angle * Math.PI / 180);
+    
+    // Animate the 4 canards based on user input
+    const uRad = (rocket.userAngle * Math.PI / 180);
+    if (canards.length === 4) {
+      canards[0].rotation.x = -uRad; // Right
+      canards[2].rotation.x = uRad;  // Left
+      
+      // Make front/back canards move slightly for a more dynamic feel
+      canards[1].rotation.x = uRad * 0.5;
+      canards[3].rotation.x = -uRad * 0.5;
+    }
   }
   
   if (renderer && scene && camera) {
