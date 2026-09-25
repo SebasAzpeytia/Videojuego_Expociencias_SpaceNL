@@ -555,6 +555,7 @@ function buildProceduralRocket() {
     canards.push(canardPivot);
   }
   
+  group.scale.set(0.75, 0.75, 0.75);
   return group;
 }
 
