@@ -106,7 +106,10 @@ class CameraProcessor:
                 
                 # raw is now ~0 when standing upright.
                 # If raw is positive, right shoulder is lower (tilting right)
-                angle = max(-30.0, min(30.0, raw * 3.0))
+                # Mapeo usando regla de 3: 45° reales = 20° en el juego
+                angle = raw * (20.0 / 45.0)
+                # Clampeamos el valor máximo a +- 20 grados
+                angle = max(-20.0, min(20.0, angle))
 
                 # Draw skeleton on the BGR frame for PiP
                 self._mp_draw.draw_landmarks(
