@@ -660,14 +660,26 @@ function renderGame() {
       let vy = -baseFallSpeed;
       
       if (hasCFD) {
-        // Map space: rocket is at 0,0. CFD grid covers X: -6 to 6, Y: -12 to 12
-        let gx = Math.floor(((px + 6) / 12) * nx);
-        let gy = Math.floor(((py + 12) / 24) * ny);
+        // Python CFD grid covers 480 units. Three.js rocket is ~7.8 units.
+        // So the grid size in Three.js is about 28 units.
+        const gridSize = 28.0;
+        let gx = Math.floor((px / gridSize) * nx + nx / 2);
+        // Python Y is inverted relative to Three.js Y
+        let gy = Math.floor((-py / gridSize) * ny + ny / 2);
+        
         if (gx >= 0 && gx < nx && gy >= 0 && gy < ny) {
           const idx = gy * nx + gx;
-          // Amplify LBM velocity smoothly
-          vx = rocket.cfd.ux[idx] * 15;
-          vy = rocket.cfd.uy[idx] * 15;
+          let lx = rocket.cfd.ux[idx];
+          let ly = rocket.cfd.uy[idx];
+          
+          vx = lx * 20;
+          vy = ly * 20; // uy is negative in python, so vy is negative, flows nose to tail visually.
+          
+          // Prevent particles from getting stuck inside the obstacle (where velocity is 0)
+          if (Math.abs(vx) < 0.05 && Math.abs(vy) < 0.1) {
+            vx += (Math.random() - 0.5) * 0.2;
+            vy = -baseFallSpeed;
+          }
         }
       }
       
