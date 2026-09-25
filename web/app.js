@@ -487,30 +487,32 @@ function buildProceduralRocket() {
   nose.position.y = 2.6;
   group.add(nose);
   
-  const finGeo = new THREE.BoxGeometry(0.1, 1, 1.2);
+  // Fins at the bottom
+  // width along X (sticking out), height along Y, thickness along Z
+  const finGeo = new THREE.BoxGeometry(0.8, 1.0, 0.05);
   const finMat = new THREE.MeshStandardMaterial({ color: 0x3a4455 });
   for (let i = 0; i < 4; i++) {
+    const finPivot = new THREE.Group();
+    finPivot.position.y = -1.5;
+    finPivot.rotation.y = i * Math.PI / 2; // Rotate 0, 90, 180, 270 deg
+    
     const fin = new THREE.Mesh(finGeo, finMat);
-    fin.position.y = -1.5;
-    fin.position.x = Math.cos(i * Math.PI / 2) * 0.6;
-    fin.position.z = Math.sin(i * Math.PI / 2) * 0.6;
-    fin.rotation.y = -i * Math.PI / 2;
-    group.add(fin);
+    fin.position.x = 0.4 + 0.4; // body radius + half fin width
+    finPivot.add(fin);
+    group.add(finPivot);
   }
   
   // Canards (4 canards near the nose)
   canards = []; // reset
-  const canardGeo = new THREE.BoxGeometry(0.1, 0.4, 0.6);
+  const canardGeo = new THREE.BoxGeometry(0.6, 0.3, 0.05); // stick out along X
   const canardMat = new THREE.MeshStandardMaterial({ color: 0xff6600 });
   for (let i = 0; i < 4; i++) {
     const canardPivot = new THREE.Group();
     canardPivot.position.y = 1.5; 
-    canardPivot.position.x = Math.cos(i * Math.PI / 2) * 0.4;
-    canardPivot.position.z = Math.sin(i * Math.PI / 2) * 0.4;
-    canardPivot.rotation.y = -i * Math.PI / 2;
+    canardPivot.rotation.y = i * Math.PI / 2;
     
     const canardMesh = new THREE.Mesh(canardGeo, canardMat);
-    canardMesh.position.z = 0.3; 
+    canardMesh.position.x = 0.4 + 0.3; // body radius + half canard width
     canardPivot.add(canardMesh);
     
     group.add(canardPivot);
