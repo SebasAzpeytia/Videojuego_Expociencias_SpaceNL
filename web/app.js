@@ -56,7 +56,8 @@ const $game = document.getElementById("game-screen");
 const $results = document.getElementById("results-screen");
 const $canvas = document.getElementById("rocket-canvas");
 // Three.js globals
-let scene, camera, renderer, rocketGroup;
+let scene, camera, renderer, rocketGroup, cfdParticleSystem;
+let minimapScene, minimapCamera, minimapRenderer, minimapRocket;
 let canards = [];
 const $camFrame = document.getElementById("camera-frame");
 const $pipPlace = document.getElementById("pip-placeholder");
@@ -471,6 +472,51 @@ function initThreeJS() {
 
   rocketGroup = buildProceduralRocket();
   scene.add(rocketGroup);
+
+  // CFD Particles
+  const pCount = 1500;
+  const pGeo = new THREE.BufferGeometry();
+  const pPos = new Float32Array(pCount * 3);
+  for (let i=0; i<pCount; i++) {
+    pPos[i*3] = (Math.random() - 0.5) * 12;
+    pPos[i*3+1] = (Math.random() - 0.5) * 24;
+    pPos[i*3+2] = (Math.random() - 0.5) * 6;
+  }
+  pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+  const pMat = new THREE.PointsMaterial({ color: 0x00d4ff, size: 0.12, transparent: true, opacity: 0.8 });
+  cfdParticleSystem = new THREE.Points(pGeo, pMat);
+  scene.add(cfdParticleSystem);
+
+  // Minimap 3D
+  const mCanvas = document.getElementById("minimap-canvas");
+  if (mCanvas) {
+    minimapRenderer = new THREE.WebGLRenderer({ canvas: mCanvas, antialias: true, alpha: true });
+    minimapRenderer.setSize(mCanvas.clientWidth, mCanvas.clientHeight, false);
+    minimapScene = new THREE.Scene();
+    minimapCamera = new THREE.PerspectiveCamera(50, mCanvas.clientWidth / mCanvas.clientHeight, 0.1, 1000);
+    minimapCamera.position.set(0, 0, 150); // Look at XY plane from Z
+    minimapCamera.lookAt(0, 0, 0);
+    
+    // We can reuse the same procedural building function
+    minimapRocket = buildProceduralRocket();
+    minimapScene.add(minimapRocket);
+    
+    const mAmbient = new THREE.AmbientLight(0xffffff, 0.8);
+    minimapScene.add(mAmbient);
+    
+    const mGrid = new THREE.GridHelper(400, 40, 0x00d4ff, 0x00d4ff);
+    mGrid.rotation.x = Math.PI / 2; // Make grid in XY plane
+    mGrid.material.opacity = 0.15;
+    mGrid.material.transparent = true;
+    minimapScene.add(mGrid);
+    
+    // Add target beacon
+    const targetGeo = new THREE.BoxGeometry(20, 2, 2);
+    const targetMat = new THREE.MeshBasicMaterial({ color: 0xff4444 });
+    const targetMesh = new THREE.Mesh(targetGeo, targetMat);
+    targetMesh.name = "targetBeacon";
+    minimapScene.add(targetMesh);
+  }
 }
 
 function buildProceduralRocket() {
@@ -586,6 +632,54 @@ function renderGame() {
     }
   }
   
+
+  if (cfdParticleSystem) {
+    const positions = cfdParticleSystem.geometry.attributes.position.array;
+    let hasCFD = (rocket.cfd && rocket.cfd.ux && rocket.cfd.ux.length > 0);
+    let nx = 0, ny = 0;
+    if (hasCFD) {
+      nx = Math.round(Math.sqrt(rocket.cfd.ux.length));
+      ny = nx;
+    }
+    
+    const baseFallSpeed = rocket.isFalling ? -0.2 : 0.6;
+    
+    for (let i=0; i<1500; i++) {
+      let px = positions[i*3];
+      let py = positions[i*3+1];
+      
+      let vx = rocket.windForce * 0.05;
+      let vy = -baseFallSpeed;
+      
+      if (hasCFD) {
+        // Map space: rocket is at 0,0. Let's assume CFD grid covers -6 to 6 in space.
+        let gx = Math.floor(((px + 6) / 12) * nx);
+        let gy = Math.floor(((py + 6) / 12) * ny);
+        if (gx >= 0 && gx < nx && gy >= 0 && gy < ny) {
+          const idx = gy * nx + gx;
+          // Amplify LBM velocity
+          vx = rocket.cfd.ux[idx] * 40;
+          vy = rocket.cfd.uy[idx] * 40;
+        }
+      }
+      
+      positions[i*3] += vx;
+      positions[i*3+1] += vy;
+      
+      // Reset logic
+      if (positions[i*3+1] < -12) {
+        positions[i*3+1] = 12;
+        positions[i*3] = (Math.random() - 0.5) * 12;
+      }
+      if (positions[i*3+1] > 12) {
+        positions[i*3+1] = -12;
+        positions[i*3] = (Math.random() - 0.5) * 12;
+      }
+      if (positions[i*3] > 6) positions[i*3] = -6;
+      if (positions[i*3] < -6) positions[i*3] = 6;
+    }
+    cfdParticleSystem.geometry.attributes.position.needsUpdate = true;
+  }
   if (renderer && scene && camera) {
     renderer.render(scene, camera);
   }
@@ -594,86 +688,36 @@ function renderGame() {
 }
 
 function renderMinimap() {
-  const mCanvas = document.getElementById("minimap-canvas");
-  if (!mCanvas) return;
-  const mCtx = mCanvas.getContext("2d");
-  const W = mCanvas.width, H = mCanvas.height;
-  mCtx.clearRect(0, 0, W, H);
+  if (!minimapRenderer || !minimapScene || !minimapCamera) return;
 
-  mCtx.strokeStyle = "rgba(0, 212, 255, 0.2)";
-  mCtx.beginPath();
-  mCtx.moveTo(W / 2, 0); mCtx.lineTo(W / 2, H);
-  mCtx.stroke();
-
-  if (rocket.path.length === 0) return;
-
-  const targetX = rocket.targetX || 0;
-  let maxAlt = 50;
-  let maxLat = Math.abs(targetX);
-  for (const pt of rocket.path) {
-    if (pt.y > maxAlt) maxAlt = pt.y;
-    if (Math.abs(pt.x) > maxLat) maxLat = Math.abs(pt.x);
+  // Scale map so 1 meter = 0.5 units
+  const s = 0.5; 
+  if (minimapRocket) {
+    minimapRocket.position.x = rocket.lateralPos * s;
+    minimapRocket.position.y = rocket.altitude * s;
+    minimapRocket.rotation.z = -(rocket.angle * Math.PI / 180);
   }
-  maxAlt = maxAlt * 1.1; // 10% vertical padding
-  maxLat = Math.max(20, maxLat) * 1.3; // 30% horizontal padding
 
-  // Draw base
-  mCtx.fillStyle = "rgba(0, 212, 255, 0.8)";
-  mCtx.beginPath(); mCtx.arc(W / 2, H, 3, 0, Math.PI * 2); mCtx.fill();
-
-  // Draw target zone
-  const targetPx = W / 2 + (targetX / maxLat) * (W / 2);
-
-  // Target vertical line (dashed)
-  mCtx.strokeStyle = "rgba(255, 60, 60, 0.8)";
-  mCtx.lineWidth = 2;
-  mCtx.setLineDash([4, 4]);
-  mCtx.beginPath(); mCtx.moveTo(targetPx, 0); mCtx.lineTo(targetPx, H); mCtx.stroke();
-  mCtx.setLineDash([]);
-
-  // Target landing pad (base)
-  mCtx.fillStyle = "#ff4444";
-  mCtx.fillRect(targetPx - 8, H - 4, 16, 4);
-  mCtx.fillStyle = "rgba(255, 50, 50, 0.3)";
-  mCtx.fillRect(targetPx - 8, 0, 16, H);
-
-  // Highlight distance remaining at current rocket altitude
-  const ptY = H - (rocket.altitude / maxAlt) * H;
-  const currPx = W / 2 + (rocket.lateralPos / maxLat) * (W / 2);
-  mCtx.strokeStyle = "rgba(255, 255, 0, 0.6)";
-  mCtx.lineWidth = 1;
-  mCtx.setLineDash([2, 2]);
-  mCtx.beginPath(); mCtx.moveTo(currPx, ptY); mCtx.lineTo(targetPx, ptY); mCtx.stroke();
-  mCtx.setLineDash([]);
-
-  mCtx.strokeStyle = "#00ff88";
-  mCtx.lineWidth = 2;
-  mCtx.beginPath();
-  for (let i = 0; i < rocket.path.length; i++) {
-    const pt = rocket.path[i];
-    const px = W / 2 + (pt.x / maxLat) * (W / 2);
-    const py = H - (pt.y / maxAlt) * H;
-    if (i === 0) mCtx.moveTo(px, py);
-    else mCtx.lineTo(px, py);
+  const targetBeacon = minimapScene.getObjectByName("targetBeacon");
+  if (targetBeacon && rocket.targetX !== undefined) {
+    targetBeacon.position.x = rocket.targetX * s;
+    targetBeacon.position.y = 0; // Ground level
   }
-  mCtx.stroke();
+  
+  // Track camera
+  // Keep the target and the rocket in view
+  const targetX = rocket.targetX !== undefined ? rocket.targetX * s : 0;
+  const rx = rocket.lateralPos * s;
+  const ry = rocket.altitude * s;
+  
+  // Center camera between rocket and target vertically and horizontally
+  const cx = (rx + targetX) / 2;
+  const cy = Math.max(ry / 2, 20); // At least 20 units up
+  
+  minimapCamera.position.set(cx, cy, 150);
+  minimapCamera.lookAt(cx, cy, 0);
 
-  const last = rocket.path[rocket.path.length - 1];
-  const px = W / 2 + (last.x / maxLat) * (W / 2);
-  const py = H - (last.y / maxAlt) * H;
-
-  // Draw mini rocket at tip of minimap
-  mCtx.save();
-  mCtx.translate(px, py);
-  mCtx.rotate(rocket.angle * Math.PI / 180);
-  mCtx.fillStyle = "#ff6600";
-  mCtx.beginPath();
-  mCtx.moveTo(0, -6);
-  mCtx.lineTo(4, 6);
-  mCtx.lineTo(-4, 6);
-  mCtx.closePath();
-  mCtx.fill();
-  mCtx.restore();
+  minimapRenderer.render(minimapScene, minimapCamera);
 }
 
 function renderConfigRocket() {
