@@ -613,6 +613,14 @@ function resizeCanvas() {
     camera.aspect = $canvas.clientWidth / $canvas.clientHeight;
     camera.updateProjectionMatrix();
   }
+  const mCanvas = document.getElementById("minimap-canvas");
+  if (minimapRenderer && mCanvas) {
+    minimapRenderer.setSize(mCanvas.clientWidth, mCanvas.clientHeight, false);
+    if (minimapCamera) {
+      minimapCamera.aspect = mCanvas.clientWidth / mCanvas.clientHeight;
+      minimapCamera.updateProjectionMatrix();
+    }
+  }
 }
 window.addEventListener("resize", resizeCanvas);
 
@@ -652,14 +660,14 @@ function renderGame() {
       let vy = -baseFallSpeed;
       
       if (hasCFD) {
-        // Map space: rocket is at 0,0. Let's assume CFD grid covers -6 to 6 in space.
+        // Map space: rocket is at 0,0. CFD grid covers X: -6 to 6, Y: -12 to 12
         let gx = Math.floor(((px + 6) / 12) * nx);
-        let gy = Math.floor(((py + 6) / 12) * ny);
+        let gy = Math.floor(((py + 12) / 24) * ny);
         if (gx >= 0 && gx < nx && gy >= 0 && gy < ny) {
           const idx = gy * nx + gx;
-          // Amplify LBM velocity
-          vx = rocket.cfd.ux[idx] * 40;
-          vy = rocket.cfd.uy[idx] * 40;
+          // Amplify LBM velocity smoothly
+          vx = rocket.cfd.ux[idx] * 15;
+          vy = rocket.cfd.uy[idx] * 15;
         }
       }
       
