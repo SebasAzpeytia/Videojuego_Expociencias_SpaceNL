@@ -473,52 +473,24 @@ function initThreeJS() {
   rocketGroup = buildProceduralRocket();
   scene.add(rocketGroup);
 
-  // CFD Particles
-  const pCount = 8000;
-  const pGeo = new THREE.BufferGeometry();
-  const pPos = new Float32Array(pCount * 3);
-  const pCol = new Float32Array(pCount * 3);
+  // CFD Continuous Streamlines (Professional VWT Style)
+  const streamCount = 28;
+  const segments = 80;
   
-  // Create a circular texture for particles
-  const texCanvas = document.createElement('canvas');
-  texCanvas.width = 64; texCanvas.height = 64;
-  const texCtx = texCanvas.getContext('2d');
-  texCtx.beginPath();
-  texCtx.arc(32, 32, 30, 0, Math.PI * 2);
-  texCtx.fillStyle = '#ffffff';
-  texCtx.fill();
-  
-  // Radial gradient for soft edges
-  const gradient = texCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
-  gradient.addColorStop(0, 'rgba(255,255,255,1)');
-  gradient.addColorStop(1, 'rgba(255,255,255,0)');
-  texCtx.fillStyle = gradient;
-  texCtx.fillRect(0,0,64,64);
-  const pTex = new THREE.CanvasTexture(texCanvas);
-
-  for (let i=0; i<pCount; i++) {
-    let angle = Math.random() * Math.PI * 2;
-    let radius = Math.random() * 8; // Spread up to 8 units radially
-    pPos[i*3] = Math.cos(angle) * radius;
-    pPos[i*3+1] = (Math.random() - 0.5) * 24; // Y from -12 to 12
-    pPos[i*3+2] = Math.sin(angle) * radius;
+  cfdParticleSystem = new THREE.Group();
+  for(let i=0; i<streamCount; i++) {
+    let geo = new THREE.BufferGeometry();
+    let pos = new Float32Array(segments * 3);
+    let col = new Float32Array(segments * 3);
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     
-    // Default blue color
-    pCol[i*3] = 0; pCol[i*3+1] = 0.8; pCol[i*3+2] = 1.0;
+    let mat = new THREE.LineBasicMaterial({ vertexColors: true, linewidth: 3, transparent: true, opacity: 1.0, depthTest: false });
+    let line = new THREE.Line(geo, mat);
+    line.renderOrder = 10; // Render on top of rocket
+    line.frustumCulled = false; // Prevent culling when updating dynamically
+    cfdParticleSystem.add(line);
   }
-  pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
-  pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
-  
-  const pMat = new THREE.PointsMaterial({ 
-    size: 0.25, 
-    map: pTex,
-    transparent: true, 
-    opacity: 0.6,
-    vertexColors: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending
-  });
-  cfdParticleSystem = new THREE.Points(pGeo, pMat);
   scene.add(cfdParticleSystem);
 
   // Minimap 3D
@@ -675,109 +647,77 @@ function renderGame() {
   }
   
 
-  if (cfdParticleSystem) {
-    const positions = cfdParticleSystem.geometry.attributes.position.array;
-    const colors = cfdParticleSystem.geometry.attributes.color.array;
-    let hasCFD = (rocket.cfd && rocket.cfd.ux && rocket.cfd.ux.length > 0);
-    let nx = 0, ny = 0;
-    if (hasCFD) {
-      nx = Math.round(Math.sqrt(rocket.cfd.ux.length));
-      ny = nx;
+  
+  
+  
+  // Trace Continuous Streamlines
+  if (cfdParticleSystem && rocket.cfd && rocket.cfd.ux) {
+    let nx = Math.round(Math.sqrt(rocket.cfd.ux.length));
+    let ny = nx;
+    
+    function getVel(cx, cy) {
+      if (cx < 0 || cx >= nx-1 || cy < 0 || cy >= ny-1) return {x:0, y:0};
+      let x0 = Math.floor(cx), y0 = Math.floor(cy);
+      let tx = cx - x0, ty = cy - y0;
+      let i00 = y0*nx+x0, i10 = y0*nx+x0+1, i01 = (y0+1)*nx+x0, i11 = (y0+1)*nx+x0+1;
+      
+      let ux = rocket.cfd.ux[i00]*(1-tx)*(1-ty) + rocket.cfd.ux[i10]*tx*(1-ty) + rocket.cfd.ux[i01]*(1-tx)*ty + rocket.cfd.ux[i11]*tx*ty;
+      let uy = rocket.cfd.uy[i00]*(1-tx)*(1-ty) + rocket.cfd.uy[i10]*tx*(1-ty) + rocket.cfd.uy[i01]*(1-tx)*ty + rocket.cfd.uy[i11]*tx*ty;
+      return {x: ux, y: uy};
     }
     
-    const baseFallSpeed = rocket.isFalling ? -0.2 : 0.8;
+    const maxMag = 0.08;
+    const streamCount = 28;
+    const segments = 80;
+    const gridSize = 28.0;
     
-    for (let i=0; i<8000; i++) {
-      let px = positions[i*3];
-      let py = positions[i*3+1];
-      let pz = positions[i*3+2];
+    for (let i = 0; i < streamCount; i++) {
+      let line = cfdParticleSystem.children[i];
+      let pos = line.geometry.attributes.position.array;
+      let col = line.geometry.attributes.color.array;
       
-      let vx = 0;
-      let vy = -baseFallSpeed;
-      let vz = 0;
+      let cx = (i + 0.5) * (nx / streamCount);
+      let cy = 0.01;
       
-      let r = Math.sqrt(px*px + pz*pz);
-      
-      if (hasCFD) {
-        const gridSize = 28.0;
-        let gx = Math.floor((r / (gridSize/2)) * (nx/2) + nx / 2);
-        let gy = Math.floor((-py / gridSize) * ny + ny / 2);
-        
-        if (gx >= 0 && gx < nx && gy >= 0 && gy < ny) {
-          const idx = gy * nx + gx;
-          let lx = rocket.cfd.ux[idx]; 
-          let ly = rocket.cfd.uy[idx]; 
-          
-          let radialV = lx * 20;
-          vy = ly * 20; 
-          
-          let dirX = (r > 0) ? (px / r) : 1;
-          let dirZ = (r > 0) ? (pz / r) : 0;
-          
-          vx = radialV * dirX;
-          vz = radialV * dirZ;
-          
-          // Add organic noise so it looks like a fluid
-          vx += (Math.random() - 0.5) * 0.1;
-          vz += (Math.random() - 0.5) * 0.1;
-          
-          if (Math.abs(radialV) < 0.05 && Math.abs(vy) < 0.1) {
-            vx += (Math.random() - 0.5) * 0.3;
-            vz += (Math.random() - 0.5) * 0.3;
-            vy = -baseFallSpeed;
-          }
-        } else {
-           // Outside LBM grid, add slight wind shear
-           vx = rocket.windForce * 0.02 * (Math.random()-0.5);
-        }
+      for (let s = 0; s < segments; s++) {
+         let v = getVel(cx, cy);
+         let mag = Math.sqrt(v.x*v.x + v.y*v.y);
+         
+         let px = (cx - nx/2) / (nx/2) * (gridSize/2);
+         let py = -(cy - ny/2) / (ny/2) * (gridSize/2);
+         
+         pos[s*3] = px;
+         pos[s*3+1] = py;
+         pos[s*3+2] = 2.0; // Float slightly in front of the rocket
+         
+         let t = Math.min(mag / maxMag, 1.0);
+         let hue = (1.0 - t) * 240; 
+         
+         let r=0, g=0, b=0;
+         if (hue > 180) { r=0; g=(240-hue)/60; b=1; } 
+         else if (hue > 120) { r=0; g=1; b=(hue-120)/60; } 
+         else if (hue > 60) { r=(120-hue)/60; g=1; b=0; } 
+         else { r=1; g=hue/60; b=0; } 
+         
+         col[s*3] = r; col[s*3+1] = g; col[s*3+2] = b;
+         
+         if (mag > 0.001) {
+            let dt = 0.5 / mag; 
+            if (dt > 1.0) dt = 1.0; 
+            cx += v.x * dt;
+            cy += v.y * dt; // uy is positive for forward flow in LBM array
+         } else {
+            cy += 0.8; // bypass obstacle deadzone
+         }
+         
+         if (cx < 0) cx = 0; if (cx > nx) cx = nx;
+         if (cy < 0) cy = 0; if (cy > ny) cy = ny;
       }
-      
-      positions[i*3] += vx;
-      positions[i*3+1] += vy;
-      positions[i*3+2] += vz;
-      
-      // Color interpolation based on radial distance
-      // Close to rocket (r < 1.5) -> Hot (Yellow/White)
-      // Mid distance (r < 4) -> Cyan
-      // Far (r >= 4) -> Blue
-      let colR = 0.0, colG = 0.5, colB = 1.0;
-      if (r < 1.5) {
-         let t = r / 1.5;
-         colR = 1.0; 
-         colG = 0.5 + 0.5 * (1-t); // yellow to white
-         colB = t;
-      } else if (r < 4.0) {
-         let t = (r - 1.5) / 2.5;
-         colR = 1.0 - t; // yellow to cyan
-         colG = 1.0;
-         colB = 1.0;
-      } else {
-         let t = Math.min((r - 4.0) / 4.0, 1.0);
-         colR = 0;
-         colG = 1.0 - 0.5 * t; // cyan to blue
-         colB = 1.0;
-      }
-      
-      // Fade out if moving very slow or very fast (optional)
-      colors[i*3] = colR;
-      colors[i*3+1] = colG;
-      colors[i*3+2] = colB;
-      
-      // Reset logic (Continuous stream from top)
-      if (positions[i*3+1] < -12) {
-        positions[i*3+1] = 12; // spawn at the top
-        let angle = Math.random() * Math.PI * 2;
-        // concentrate more particles near the center
-        let radius = Math.pow(Math.random(), 1.5) * 8; 
-        positions[i*3] = Math.cos(angle) * radius;
-        positions[i*3+2] = Math.sin(angle) * radius;
-      }
-      // Safety bounds
-      if (positions[i*3+1] > 12) positions[i*3+1] = -12;
+      line.geometry.attributes.position.needsUpdate = true;
+      line.geometry.attributes.color.needsUpdate = true;
     }
-    cfdParticleSystem.geometry.attributes.position.needsUpdate = true;
-    cfdParticleSystem.geometry.attributes.color.needsUpdate = true;
   }
+
   if (renderer && scene && camera) {
     renderer.render(scene, camera);
   }

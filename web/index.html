@@ -155,9 +155,20 @@
   <!-- ═══════════ GAME ═══════════ -->
   <div id="game-screen" class="screen">
     <canvas id="rocket-canvas"></canvas>
-
+    
     <!-- Overlay HUD -->
     <div id="game-ui-overlay">
+
+    <!-- CFD Velocity Legend -->
+    <div id="cfd-legend" style="position: absolute; top: 70px; left: 20px; color: white; font-family: monospace; font-size: 14px; z-index: 20; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px;">
+      <div style="margin-bottom: 8px; font-weight: bold;">Velocidad CFD (m/s)</div>
+      <div style="display: flex; align-items: center; gap: 10px;"><div style="width: 15px; height: 15px; background: hsl(0, 100%, 50%);"></div> 1.50+</div>
+      <div style="display: flex; align-items: center; gap: 10px;"><div style="width: 15px; height: 15px; background: hsl(60, 100%, 50%);"></div> 1.10</div>
+      <div style="display: flex; align-items: center; gap: 10px;"><div style="width: 15px; height: 15px; background: hsl(120, 100%, 50%);"></div> 0.75</div>
+      <div style="display: flex; align-items: center; gap: 10px;"><div style="width: 15px; height: 15px; background: hsl(180, 100%, 50%);"></div> 0.35</div>
+      <div style="display: flex; align-items: center; gap: 10px;"><div style="width: 15px; height: 15px; background: hsl(240, 100%, 50%);"></div> 0.00</div>
+    </div>
+
       <div>
         <button id="btn-pause" class="btn-pause">⏸ PAUSA (Espacio)</button>
         <button id="btn-skip" class="btn-pause" style="margin-left: 10px; display: none; background: #ffaa00; color: #000;">⏭ SALTAR (S)</button>
@@ -308,7 +319,11 @@
   </div>
 
   <!-- All vision runs in Python backend — no CDN scripts needed -->
-  <script src="app.js"></script>
+  <script src="js/globals.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/graphics.js"></script>
+  <script src="js/network.js"></script>
+  <script src="js/main.js"></script>
 </body>
 
 </html>
