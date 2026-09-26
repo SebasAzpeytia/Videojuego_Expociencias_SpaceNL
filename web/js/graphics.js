@@ -51,14 +51,15 @@ function initThreeJS() {
     minimapCamera.position.set(0, 0, 150); // Look at XY plane from Z
     minimapCamera.lookAt(0, 0, 0);
 
-    // We can reuse the same procedural building function
+    // Reuse procedural rocket but scale it up for map visibility
     minimapRocket = buildProceduralRocket();
+    minimapRocket.scale.set(1.5, 1.5, 1.5);
     minimapScene.add(minimapRocket);
 
     const mAmbient = new THREE.AmbientLight(0xffffff, 0.8);
     minimapScene.add(mAmbient);
 
-    const mGrid = new THREE.GridHelper(400, 40, 0x00d4ff, 0x00d4ff);
+    const mGrid = new THREE.GridHelper(2000, 100, 0x00d4ff, 0x00d4ff);
     mGrid.rotation.x = Math.PI / 2; // Make grid in XY plane
     mGrid.material.opacity = 0.15;
     mGrid.material.transparent = true;
@@ -299,31 +300,42 @@ function renderGame() {
 function renderMinimap() {
   if (!minimapRenderer || !minimapScene || !minimapCamera) return;
 
-  // Scale map so 1 meter = 0.5 units
+  // Scale: 1 meter = 0.5 world units
   const s = 0.5;
+  const rx = rocket.lateralPos * s;
+  const ry = rocket.altitude * s;
+
   if (minimapRocket) {
-    minimapRocket.position.x = rocket.lateralPos * s;
-    minimapRocket.position.y = rocket.altitude * s;
+    minimapRocket.position.x = rx;
+    minimapRocket.position.y = ry;
     minimapRocket.rotation.z = -(rocket.angle * Math.PI / 180);
   }
 
   const targetBeacon = minimapScene.getObjectByName("targetBeacon");
-  if (targetBeacon && rocket.targetX !== undefined) {
-    targetBeacon.position.x = rocket.targetX * s;
-    targetBeacon.position.y = 0; // Ground level
+  const tx = rocket.targetX !== undefined ? rocket.targetX * s : 0;
+  if (targetBeacon) {
+    targetBeacon.position.x = tx;
+    targetBeacon.position.y = 0;
   }
 
-  // Track camera
-  // Keep the target and the rocket in view
-  const targetX = rocket.targetX !== undefined ? rocket.targetX * s : 0;
-  const rx = rocket.lateralPos * s;
-  const ry = rocket.altitude * s;
+  // Camera: frame both the rocket and the target with margin
+  // Center X between rocket and target
+  const cx = (rx + tx) / 2;
+  // Center Y: show from ground (0) to above the rocket
+  const cy = Math.max(ry / 2, 10);
 
-  // Center camera between rocket and target vertically and horizontally
-  const cx = (rx + targetX) / 2;
-  const cy = Math.max(ry / 2, 20); // At least 20 units up
+  // Zoom: distance from camera so both points fit in view
+  // Compute the bounding box we need to show
+  const spanX = Math.abs(rx - tx) + 40;  // horizontal span + margin
+  const spanY = Math.max(ry + 20, 40);   // vertical span (ground to rocket + margin)
+  const span = Math.max(spanX, spanY);
 
-  minimapCamera.position.set(cx, cy, 150);
+  // Distance needed to fit 'span' units in view with FOV 50°
+  const fovRad = minimapCamera.fov * Math.PI / 180;
+  const dist = (span / 2) / Math.tan(fovRad / 2);
+  const camZ = Math.max(dist, 60); // minimum distance
+
+  minimapCamera.position.set(cx, cy, camZ);
   minimapCamera.lookAt(cx, cy, 0);
 
   minimapRenderer.render(minimapScene, minimapCamera);
