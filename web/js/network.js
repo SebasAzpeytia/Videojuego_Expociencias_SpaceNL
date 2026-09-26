@@ -57,9 +57,13 @@ function connectWS() {
         time: d.time,
         candy: d.candy,
         mass: d.mass,
-        velocity: d.velocity,
-        cfd: d.cfd !== undefined ? d.cfd : rocket.cfd
+        velocity: d.velocity
       });
+      // Update CFD only when the backend actually sends it (every 3rd frame)
+      if (d.cfd) {
+        rocket.cfd = d.cfd;
+        console.log("[CFD] Received grid:", d.cfd.ux.length, "cells, sample ux[0]:", d.cfd.ux[0], "uy[0]:", d.cfd.uy[0]);
+      }
       rocket.accDev += Math.abs(d.angle) * (1 / 60);
       rocket.path.push({ x: d.lateral_pos, y: d.altitude });
       if (d.camera_active !== undefined) cameraActive = d.camera_active;

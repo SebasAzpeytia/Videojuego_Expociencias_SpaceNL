@@ -46,6 +46,7 @@ const rocket = {
   windForce: 0, windSpeedKmh: 0,
   userAngle: 0, time: 0,
   candy: 0, accDev: 0, mass: 0,
+  cfd: null,
   path: []
 };
 

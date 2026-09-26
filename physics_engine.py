@@ -342,7 +342,9 @@ class RocketSimulator:
             self._update_cfd_obstacle()
             # map wind_speed (m/s) to lattice velocity (e.g. max 0.1)
             u_in = (self.wind_speed / 30.0) * 0.15 
-            v_in = 0.15 if self.vertical_velocity >= 0 else -0.15
+            # Always flow top→bottom for consistent visual; scale by flight speed
+            speed_factor = min(abs(self.vertical_velocity) / 50.0, 1.0)
+            v_in = 0.05 + speed_factor * 0.10  # range [0.05 .. 0.15]
             ux, uy = self.cfd.step(u_inlet=u_in, v_inlet=v_in)
             
             # Send the full grid
