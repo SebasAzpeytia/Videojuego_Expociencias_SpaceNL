@@ -4,6 +4,8 @@
 function initThreeJS() {
   renderer = new THREE.WebGLRenderer({ canvas: $canvas, antialias: true, alpha: true });
   renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   scene = new THREE.Scene();
 
@@ -15,11 +17,38 @@ function initThreeJS() {
   scene.add(ambientLight);
 
   const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  dirLight.position.set(5, 10, 5);
+  dirLight.position.set(10, 20, 10);
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.width = 2048;
+  dirLight.shadow.mapSize.height = 2048;
+  dirLight.shadow.camera.near = 0.5;
+  dirLight.shadow.camera.far = 50;
+  dirLight.shadow.camera.left = -20;
+  dirLight.shadow.camera.right = 20;
+  dirLight.shadow.camera.top = 20;
+  dirLight.shadow.camera.bottom = -20;
   scene.add(dirLight);
 
   rocketGroup = buildProceduralRocket();
   scene.add(rocketGroup);
+
+  // Ground mesh for visual context during liftoff
+  const groundGroup = new THREE.Group();
+  
+  const groundSolid = new THREE.Mesh(
+    new THREE.BoxGeometry(200, 2, 200),
+    new THREE.MeshStandardMaterial({ color: 0x1a2118, roughness: 0.9, metalness: 0.1 })
+  );
+  groundSolid.receiveShadow = true;
+  groundSolid.position.y = -3.8; // Base position right below the rocket nozzle
+  groundGroup.add(groundSolid);
+  
+  const gridHelper = new THREE.GridHelper(200, 50, 0x445544, 0x223322);
+  gridHelper.position.y = -2.79; // Just above the box (box top is at -2.8)
+  groundGroup.add(gridHelper);
+
+  groundMesh = groundGroup;
+  scene.add(groundMesh);
 
   // CFD Continuous Streamlines (Professional VWT Style)
   const streamCount = 28;
@@ -156,6 +185,13 @@ function buildProceduralRocket() {
     canards.push(canardPivot);
   }
 
+  group.traverse(function(child) {
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
+
   group.scale.set(0.75, 0.75, 0.75);
   return group;
 }
@@ -193,6 +229,11 @@ function renderGame() {
       canards[1].rotation.x = uRad * 0.5;
       canards[3].rotation.x = -uRad * 0.5;
     }
+  }
+
+  if (groundMesh) {
+    // 1 unit in 3D ≈ 1.5 meters of altitude (scale factor)
+    groundMesh.position.y = -5.5 - (rocket.altitude / 1.5);
   }
 
   // ── CFD Streamline Visualization ──────────────────────────────────────
