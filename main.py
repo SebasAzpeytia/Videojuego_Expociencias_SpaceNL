@@ -293,7 +293,7 @@ async def _ws_handler(ws):
 
             hit_ground = _sim.altitude <= 0.0 and _sim.time > 1.0
             
-            if hit_ground or crashed:
+            if hit_ground:
                 if _sim.mode == "human":
                     _sim.start_pid_mode()
                     # Transición a la cinemática del PID
