@@ -80,9 +80,6 @@ function connectWS() {
       gameState = "replay-intro";
       rocket.path = []; // Reset minimap trace
 
-      const gs = document.getElementById("game-screen");
-      if (gs) gs.classList.add("pid-filter");
-
       const overlay = document.getElementById("replay-overlay");
       const landingOverlay = document.getElementById("landing-overlay");
 
@@ -114,6 +111,9 @@ function connectWS() {
       }
 
       const startPID = () => {
+        const gs = document.getElementById("game-screen");
+        if (gs) gs.classList.add("pid-filter");
+        
         if (overlay) overlay.classList.add("hidden");
         gameState = "playing_pid";
         if ($btnSkip) $btnSkip.style.display = "inline-block";
@@ -139,12 +139,14 @@ function connectWS() {
           tSub.style.color = (color === "#ffcc00") ? "#ffffff" : color;
         }
 
-        landingOverlay.classList.remove("hidden");
         landingOverlayTimeout = setTimeout(() => {
-          landingOverlay.classList.add("hidden");
-          if (overlay) overlay.classList.remove("hidden");
-          pidStartTimeout = setTimeout(startPID, 2500);
-        }, 2500);
+          landingOverlay.classList.remove("hidden");
+          landingOverlayTimeout = setTimeout(() => {
+            landingOverlay.classList.add("hidden");
+            if (overlay) overlay.classList.remove("hidden");
+            pidStartTimeout = setTimeout(startPID, 2500);
+          }, 2500);
+        }, 1200);
       } else {
         if (overlay) overlay.classList.remove("hidden");
         pidStartTimeout = setTimeout(startPID, 2500);
