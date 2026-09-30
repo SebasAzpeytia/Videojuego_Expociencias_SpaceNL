@@ -29,8 +29,11 @@ function initThreeJS() {
   dirLight.shadow.camera.bottom = -20;
   scene.add(dirLight);
 
-  rocketGroup = buildProceduralRocket();
-  scene.add(rocketGroup);
+  // Load rocket model (GLB or Procedural)
+  loadRocketModel((modelGroup) => {
+    rocketGroup = modelGroup;
+    scene.add(rocketGroup);
+  }, true);
 
   // Ground mesh for visual context during liftoff
   const groundGroup = new THREE.Group();
@@ -80,10 +83,12 @@ function initThreeJS() {
     minimapCamera.position.set(0, 0, 150); // Look at XY plane from Z
     minimapCamera.lookAt(0, 0, 0);
 
-    // Reuse procedural rocket but scale it up for map visibility
-    minimapRocket = buildProceduralRocket();
-    minimapRocket.scale.set(2.344, 2.344, 2.344);
-    minimapScene.add(minimapRocket);
+    // Reuse procedural or GLB rocket for map visibility
+    loadRocketModel((modelGroup) => {
+      minimapRocket = modelGroup;
+      minimapRocket.scale.set(2.344, 2.344, 2.344);
+      minimapScene.add(minimapRocket);
+    });
 
     const mAmbient = new THREE.AmbientLight(0xffffff, 0.8);
     minimapScene.add(mAmbient);
@@ -103,7 +108,51 @@ function initThreeJS() {
   }
 }
 
-function buildProceduralRocket() {
+function loadRocketModel(callback, isMain = false) {
+  if (customModelDataURL) {
+    const loader = new THREE.GLTFLoader();
+    loader.load(customModelDataURL, (gltf) => {
+      const model = gltf.scene;
+      
+      // Try to find canards in the GLB to animate them
+      let tempCanards = [];
+      const canardNames = ["canard_1", "canard_2", "canard_3", "canard_4"]; // adjust names as needed
+      model.traverse((child) => {
+        if (child.isMesh && canardNames.includes(child.name.toLowerCase())) {
+          tempCanards.push(child);
+        }
+      });
+      // Fallback: if not exactly 4 canards found by name, just leave empty
+      if (tempCanards.length !== 4) {
+        tempCanards = [];
+      }
+      if (isMain) {
+        canards = tempCanards;
+      }
+
+      // Center and scale the model automatically
+      const box = new THREE.Box3().setFromObject(model);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const scale = 7.8 / maxDim; // Adjust to match procedural rocket size (~7.8 units height)
+      
+      model.position.sub(center);
+      model.scale.set(scale, scale, scale);
+      
+      const wrapper = new THREE.Group();
+      wrapper.add(model);
+      callback(wrapper);
+    }, undefined, (error) => {
+      console.error("Failed to load GLB:", error);
+      callback(buildProceduralRocket(isMain));
+    });
+  } else {
+    callback(buildProceduralRocket(isMain));
+  }
+}
+
+function buildProceduralRocket(isMain = false) {
   const group = new THREE.Group();
 
   // Body (Black, long)
@@ -147,7 +196,8 @@ function buildProceduralRocket() {
   }
 
   // Canards (Orange, smaller swept shapes)
-  canards = []; // reset
+  let tempCanards = [];
+  
   const canardShape = new THREE.Shape();
   canardShape.moveTo(0, 0);
   canardShape.lineTo(0, 0.7);
@@ -182,7 +232,11 @@ function buildProceduralRocket() {
     // ExtrudeGeometry builds shapes on the XY plane.
     // So the canard is flat on XY, with thickness along Z.
     // When we rotate around X, it pitches.
-    canards.push(canardPivot);
+    tempCanards.push(canardPivot);
+  }
+  
+  if (isMain) {
+    canards = tempCanards;
   }
 
   group.traverse(function(child) {
@@ -394,164 +448,69 @@ function renderMinimap() {
   minimapRenderer.render(minimapScene, minimapCamera);
 }
 
+let configRenderer, configScene, configCamera, configRocketGroup;
+let configAnimationId = null;
+
 function renderConfigRocket() {
   const cCanvas = document.getElementById("config-rocket-canvas");
   if (!cCanvas) return;
-  const cCtx = cCanvas.getContext("2d");
-  const W = cCanvas.width, H = cCanvas.height;
-  cCtx.clearRect(0, 0, W, H);
-
-  // Background
-  const grad = cCtx.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, "#020410");
-  grad.addColorStop(1, "#0d1220");
-  cCtx.fillStyle = grad;
-  cCtx.fillRect(0, 0, W, H);
-
-  let rLen = 140, rW = 28;
-  let finSpan = 20, finRoot = 20;
-
-  const mH = parseFloat(confInputs.height.value) || 3.0;
-  const mW = parseFloat(confInputs.width.value) || 0.2;
-  const scale = 140 / mH;
-  rLen = mH * scale;
-  rW = mW * scale * 2.0;
-
-  if (currentRocketData && currentRocketData.length > 0) {
-    const s = 140 / currentRocketData.length;
-    rLen = currentRocketData.length * s;
-    rW = currentRocketData.radius * 2 * s * 2.0;
-    finSpan = currentRocketData.fin_span * s * 2.5;
-    finRoot = currentRocketData.fin_root * s * 2.0;
+  
+  if (!configRenderer) {
+    configRenderer = new THREE.WebGLRenderer({ canvas: cCanvas, antialias: true, alpha: true });
+    configRenderer.setPixelRatio(window.devicePixelRatio);
+    
+    configScene = new THREE.Scene();
+    
+    configCamera = new THREE.PerspectiveCamera(50, cCanvas.width / cCanvas.height, 0.1, 100);
+    configCamera.position.set(0, 1, 12);
+    
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    configScene.add(ambientLight);
+    
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(5, 10, 5);
+    configScene.add(dirLight);
+    
+    const animateConfig = function() {
+      configAnimationId = requestAnimationFrame(animateConfig);
+      if (configRocketGroup) {
+        configRocketGroup.rotation.y += 0.015;
+      }
+      configRenderer.render(configScene, configCamera);
+    };
+    animateConfig();
   }
+  
+  updateConfigModel();
+}
 
-  const cx = W / 2;
-  const cy = H / 2 + rLen / 10;
-
-  cCtx.save();
-  cCtx.translate(cx, cy);
-
-  // Body
-  cCtx.fillStyle = "#c0c8d4";
-  cCtx.beginPath();
-  cCtx.moveTo(-rW / 2, rLen * 0.35);
-  cCtx.lineTo(-rW / 2, -rLen * 0.35);
-  cCtx.quadraticCurveTo(-rW / 2, -rLen * 0.45, 0, -rLen / 2);
-  cCtx.quadraticCurveTo(rW / 2, -rLen * 0.45, rW / 2, -rLen * 0.35);
-  cCtx.lineTo(rW / 2, -rLen * 0.35);
-  cCtx.lineTo(rW / 2, rLen * 0.35);
-  cCtx.closePath();
-  cCtx.fill();
-
-  // Accent stripe
-  cCtx.fillStyle = "#ff6600";
-  cCtx.fillRect(-rW / 2 + 2, -rLen * 0.15, rW - 4, 8);
-
-  // Fins
-  cCtx.fillStyle = "#3a4455";
-  cCtx.beginPath();
-  cCtx.moveTo(-rW / 2, rLen * 0.35);
-  cCtx.lineTo(-rW / 2 - finSpan, rLen * 0.35 + 4);
-  cCtx.lineTo(-rW / 2, rLen * 0.35 - finRoot);
-  cCtx.closePath(); cCtx.fill();
-
-  cCtx.beginPath();
-  cCtx.moveTo(rW / 2, rLen * 0.35);
-  cCtx.lineTo(rW / 2 + finSpan, rLen * 0.35 + 4);
-  cCtx.lineTo(rW / 2, rLen * 0.35 - finRoot);
-  cCtx.closePath(); cCtx.fill();
-
-  // Canards (Active Stabilization) based on NACA profile
-  const naca = confInputs.naca ? confInputs.naca.value : "66-212";
-  const canardSpan = finSpan * 0.8;
-  const canardRoot = finRoot * 0.8;
-  const canardY = -rLen * 0.15;
-
-  cCtx.fillStyle = "#ff6600";
-
-  // Left canard
-  cCtx.save();
-  cCtx.translate(-rW / 2, canardY);
-  cCtx.rotate(Math.PI / 8); // Tilt to show profile
-  cCtx.beginPath();
-  cCtx.moveTo(0, canardRoot / 2);
-
-  if (naca === "0012") {
-    // Thin symmetric
-    cCtx.lineTo(-canardSpan, 1);
-    cCtx.lineTo(0, -canardRoot / 2);
-  } else if (naca === "0018") {
-    // Thick symmetric
-    cCtx.lineTo(-canardSpan, 4);
-    cCtx.lineTo(0, -canardRoot / 2);
-  } else if (naca === "66-212") {
-    // Cambered (curved)
-    cCtx.quadraticCurveTo(-canardSpan / 2, 8, -canardSpan, 2);
-    cCtx.lineTo(0, -canardRoot / 2);
-  } else {
-    cCtx.lineTo(-canardSpan, 2);
-    cCtx.lineTo(0, -canardRoot / 2);
+function updateConfigModel() {
+  if (configRocketGroup) {
+    configScene.remove(configRocketGroup);
   }
-  cCtx.closePath();
-  cCtx.fill();
-  cCtx.restore();
+  
+  loadRocketModel((modelGroup) => {
+    configRocketGroup = modelGroup;
+    configScene.add(configRocketGroup);
+  }, false);
+}
 
-  // Right canard
-  cCtx.save();
-  cCtx.translate(rW / 2, canardY);
-  cCtx.rotate(Math.PI / 8);
-  cCtx.beginPath();
-  cCtx.moveTo(0, canardRoot / 2);
-  if (naca === "0012") {
-    cCtx.lineTo(canardSpan, 1);
-    cCtx.lineTo(0, -canardRoot / 2);
-  } else if (naca === "0018") {
-    cCtx.lineTo(canardSpan, 4);
-    cCtx.lineTo(0, -canardRoot / 2);
-  } else if (naca === "66-212") {
-    cCtx.quadraticCurveTo(canardSpan / 2, -4, canardSpan, 2);
-    cCtx.lineTo(0, -canardRoot / 2);
-  } else {
-    cCtx.lineTo(canardSpan, 2);
-    cCtx.lineTo(0, -canardRoot / 2);
+function updateMainRocketModel() {
+  if (rocketGroup) {
+    scene.remove(rocketGroup);
   }
-  cCtx.closePath();
-  cCtx.fill();
-  cCtx.restore();
-
-  // Barrowman CP Calculation
-  const L_nose = rLen * 0.2;
-  const CN_nose = 2.0;
-  const X_nose = 0.466 * L_nose;
-
-  const d = rW;
-  const CN_rear = 8.0 * Math.pow(finSpan / d, 2);
-  const X_rear = rLen - (finRoot / 2.0);
-
-  const CN_canard = 4.0 * Math.pow(canardSpan / d, 2);
-  const X_canard = rLen * 0.15 + (canardRoot / 2.0);
-
-  const total_CN = CN_nose + CN_rear + CN_canard;
-  const X_cp = (CN_nose * X_nose + CN_rear * X_rear + CN_canard * X_canard) / total_CN;
-
-  // Draw CP Indicator (Green dotted circle)
-  cCtx.fillStyle = "rgba(0, 255, 0, 0.4)";
-  cCtx.strokeStyle = "#00ff00";
-  cCtx.lineWidth = 1;
-  cCtx.setLineDash([2, 2]);
-  cCtx.beginPath();
-  cCtx.arc(0, -rLen / 2 + X_cp, d * 0.4, 0, Math.PI * 2);
-  cCtx.fill();
-  cCtx.stroke();
-  cCtx.setLineDash([]);
-
-  // Draw CP symbol cross
-  cCtx.beginPath();
-  cCtx.moveTo(-d * 0.4, -rLen / 2 + X_cp);
-  cCtx.lineTo(d * 0.4, -rLen / 2 + X_cp);
-  cCtx.moveTo(0, -rLen / 2 + X_cp - d * 0.4);
-  cCtx.lineTo(0, -rLen / 2 + X_cp + d * 0.4);
-  cCtx.stroke();
-
-  cCtx.restore();
+  if (minimapRocket) {
+    minimapScene.remove(minimapRocket);
+  }
+  
+  loadRocketModel((modelGroup) => {
+    rocketGroup = modelGroup;
+    scene.add(rocketGroup);
+  }, true);
+  
+  loadRocketModel((modelGroup) => {
+    minimapRocket = modelGroup;
+    minimapRocket.scale.set(2.344, 2.344, 2.344);
+    minimapScene.add(minimapRocket);
+  });
 }

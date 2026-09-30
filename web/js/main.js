@@ -5,9 +5,9 @@ function showScreen(id) {
   document.getElementById(id).classList.add("active");
 }
 
-// ORK File Drag and Drop globals
+// GLB File Drag and Drop globals
 const dropZone = document.getElementById('drop-zone');
-const orkInput = document.getElementById('conf-ork');
+const glbInput = document.getElementById('conf-glb');
 const fileNameDisplay = document.getElementById('file-name');
 
 ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -24,7 +24,7 @@ function preventDefaults(e) {
   dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
 });
 dropZone.addEventListener('drop', handleDrop, false);
-orkInput.addEventListener('change', (e) => {
+glbInput.addEventListener('change', (e) => {
   if (e.target.files.length) handleFile(e.target.files[0]);
 });
 
@@ -35,18 +35,20 @@ function handleDrop(e) {
 }
 
 function handleFile(file) {
-  if (file.name.endsWith('.ork')) {
+  if (file.name.toLowerCase().endsWith('.glb') || file.name.toLowerCase().endsWith('.gltf')) {
     fileNameDisplay.textContent = file.name;
     const reader = new FileReader();
     reader.onload = function (e) {
-      const base64 = e.target.result.split(',')[1];
-      orkFileData = base64;
-      wsSend({ action: "parse_ork", ork_file: base64 });
+      customModelDataURL = e.target.result;
+      renderConfigRocket(); // Update the previewer
+      if (typeof updateMainRocketModel === 'function') updateMainRocketModel(); // Update main scene
     };
     reader.readAsDataURL(file);
   } else {
-    fileNameDisplay.textContent = 'Formato inválido (solo .ork)';
-    orkFileData = null;
+    fileNameDisplay.textContent = 'Formato inválido (solo .glb o .gltf)';
+    customModelDataURL = null;
+    renderConfigRocket();
+    if (typeof updateMainRocketModel === 'function') updateMainRocketModel();
   }
 }
 
@@ -249,8 +251,8 @@ function runCountdown() {
     lon: parseFloat(document.getElementById('conf-lon').value),
     date: confInputs.date.value,
     time: confInputs.time.value,
-    crash_angle: confInputs.crash.value,
-    crash_enabled: document.getElementById('conf-crash-enabled').checked,
+    crash_angle: 45.0,
+    crash_enabled: true,
     inertia_mult: confInputs.inertiaMult.value,
     damping: confInputs.damping.value,
     naca_profile: confInputs.naca.value,
@@ -260,8 +262,8 @@ function runCountdown() {
     target_max: document.getElementById('conf-target-max').value
   };
   initialCandy = parseFloat(confInputs.candy.value) || 0.25;
-  currentCrashAngle = parseFloat(confInputs.crash.value);
-  currentCrashEnabled = document.getElementById('conf-crash-enabled').checked;
+  currentCrashAngle = 45.0;
+  currentCrashEnabled = true;
 
   const iv = setInterval(() => {
     n--;
@@ -348,17 +350,11 @@ function init() {
 
   if ($btnSaveConfig) {
     $btnSaveConfig.addEventListener("click", () => {
+      updateMainRocketModel();
       showScreen("splash-screen");
     });
   }
 
-  const $crashEnabled = document.getElementById('conf-crash-enabled');
-  if ($crashEnabled) {
-    $crashEnabled.addEventListener('change', (e) => {
-      confInputs.crash.disabled = !e.target.checked;
-      document.getElementById('conf-crash-label').style.opacity = e.target.checked ? '1' : '0.5';
-    });
-  }
 
   $btnStart.addEventListener("click", () => {
     $btnStart.disabled = true;

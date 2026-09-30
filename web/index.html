@@ -67,12 +67,12 @@
         <div class="config-section">
           <h3>🚀 Especificaciones</h3>
           <div id="drop-zone" class="drop-zone">
-            <span class="drop-text">Arrastra tu diseño .ork o</span>
+            <span class="drop-text">Arrastra tu modelo 3D (.glb) o</span>
             <label class="btn-neon small">
-              <input type="file" id="conf-ork" accept=".ork" style="display:none;">
+              <input type="file" id="conf-glb" accept=".glb,.gltf" style="display:none;">
               <span>SELECCIONAR</span>
             </label>
-            <div id="file-name" class="file-name">Usando modelo por defecto</div>
+            <div id="file-name" class="file-name">Usando modelo 3D por defecto</div>
           </div>
           <div id="config-visualizer" style="text-align: center; margin-bottom: 15px;">
             <canvas id="config-rocket-canvas" width="250" height="250"
@@ -99,12 +99,7 @@
         <div class="config-section">
           <h3>🎮 Control & Entorno</h3>
           <label>Ángulo Max Canards (°) <input type="number" id="conf-angle" value="20.0" step="1"></label>
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px;">
-            <label style="margin: 0;">Activar Umbral Crítico</label>
-            <input type="checkbox" id="conf-crash-enabled" checked style="width: auto;">
-          </div>
-          <label id="conf-crash-label">Umbral Crítico (°) <input type="number" id="conf-crash" value="45.0"
-              step="1"></label>
+
           <label>Distancia Mín. Objetivo (m) <input type="number" id="conf-target-min" value="100" step="10"></label>
           <label>Distancia Máx. Objetivo (m) <input type="number" id="conf-target-max" value="300" step="10"></label>
           <label>Ubicación Real</label>

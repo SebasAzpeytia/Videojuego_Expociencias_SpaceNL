@@ -31,7 +31,7 @@ let cfdDashOffset = 0;
 let landingOverlayTimeout = null;
 let pidStartTimeout = null;
 let currentRocketData = null;
-let orkFileData = null;
+let customModelDataURL = null;
 let map = null;
 let mapMarker = null;
 let replayData = null;
@@ -59,6 +59,7 @@ const $canvas = document.getElementById("rocket-canvas");
 // Three.js globals
 let scene, camera, renderer, rocketGroup, cfdParticleSystem, groundMesh;
 let minimapScene, minimapCamera, minimapRenderer, minimapRocket;
+let confScene, confCamera, confRenderer, confRocketGroup;
 let canards = [];
 const $camFrame = document.getElementById("camera-frame");
 const $pipPlace = document.getElementById("pip-placeholder");
@@ -77,7 +78,7 @@ const confInputs = {
   width: document.getElementById("conf-width"),
   candy: document.getElementById("conf-candy"),
   angle: document.getElementById("conf-angle"),
-  crash: document.getElementById("conf-crash"),
+
   loc: document.getElementById("conf-loc"),
   date: document.getElementById("conf-date"),
   time: document.getElementById("conf-time"),
