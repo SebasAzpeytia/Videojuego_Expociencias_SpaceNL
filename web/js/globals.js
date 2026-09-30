@@ -57,7 +57,7 @@ const $game = document.getElementById("game-screen");
 const $results = document.getElementById("results-screen");
 const $canvas = document.getElementById("rocket-canvas");
 // Three.js globals
-let scene, camera, renderer, rocketGroup, cfdParticleSystem, groundMesh;
+let scene, camera, renderer, rocketGroup, cfdParticleSystem, groundMesh, starsGroup;
 let minimapScene, minimapCamera, minimapRenderer, minimapRocket;
 let confScene, confCamera, confRenderer, confRocketGroup;
 let canards = [];

@@ -58,6 +58,34 @@ function initThreeJS() {
   const segments = 80;
 
   cfdParticleSystem = new THREE.Group();
+  
+  // Stars for background and parallax effect
+  const starGeo = new THREE.BufferGeometry();
+  const starVertices = [];
+  for (let i = 0; i < 600; i++) {
+    const x = (Math.random() - 0.5) * 800;
+    const y = (Math.random() - 0.5) * 800;
+    const z = - (Math.random() * 200 + 60);
+    starVertices.push(x, y, z);
+  }
+  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+  
+  const starMat = new THREE.PointsMaterial({
+    color: 0xffffff,
+    size: 0.6,
+    transparent: true,
+    opacity: 0.9,
+    sizeAttenuation: true
+  });
+  
+  starsGroup = new THREE.Group();
+  const starMesh1 = new THREE.Points(starGeo, starMat);
+  const starMesh2 = new THREE.Points(starGeo, starMat);
+  starMesh2.position.y = 800;
+  starsGroup.add(starMesh1);
+  starsGroup.add(starMesh2);
+  
+  scene.add(starsGroup);
   for (let i = 0; i < streamCount; i++) {
     let geo = new THREE.BufferGeometry();
     let pos = new Float32Array(segments * 3);
@@ -270,6 +298,10 @@ function resizeCanvas() {
 window.addEventListener("resize", resizeCanvas);
 
 function renderGame() {
+  if (starsGroup) {
+    starsGroup.position.y = - (rocket.altitude / 15.0) % 800;
+  }
+
   if (rocketGroup) {
     rocketGroup.rotation.z = -(rocket.angle * Math.PI / 180);
 

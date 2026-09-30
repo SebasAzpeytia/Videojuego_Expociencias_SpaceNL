@@ -44,28 +44,29 @@ function connectWS() {
     }
 
     else if (d.action === "state") {
-      Object.assign(rocket, {
-        angle: d.angle,
-        angularVelocity: d.angular_velocity,
-        altitude: d.altitude,
-        verticalVelocity: d.vertical_velocity,
-        isFalling: d.is_falling,
-        lateralPos: d.lateral_pos,
-        windForce: d.wind_force,
-        windSpeedKmh: d.wind_speed_kmh,
-        userAngle: d.user_angle,
-        time: d.time,
-        candy: d.candy,
-        mass: d.mass,
-        velocity: d.velocity
-      });
-      // Update CFD only when the backend actually sends it (every 3rd frame)
-      if (d.cfd) {
-        rocket.cfd = d.cfd;
-        console.log("[CFD] Received grid:", d.cfd.ux.length, "cells, sample ux[0]:", d.cfd.ux[0], "uy[0]:", d.cfd.uy[0]);
+      if (gameState !== "replay-intro") {
+        Object.assign(rocket, {
+          angle: d.angle,
+          angularVelocity: d.angular_velocity,
+          altitude: d.altitude,
+          verticalVelocity: d.vertical_velocity,
+          isFalling: d.is_falling,
+          lateralPos: d.lateral_pos,
+          windForce: d.wind_force,
+          windSpeedKmh: d.wind_speed_kmh,
+          userAngle: d.user_angle,
+          time: d.time,
+          candy: d.candy,
+          mass: d.mass,
+          velocity: d.velocity
+        });
+        if (d.cfd) {
+          rocket.cfd = d.cfd;
+          console.log("[CFD] Received grid:", d.cfd.ux.length, "cells, sample ux[0]:", d.cfd.ux[0], "uy[0]:", d.cfd.uy[0]);
+        }
+        rocket.accDev += Math.abs(d.angle) * (1 / 60);
+        rocket.path.push({ x: d.lateral_pos, y: d.altitude });
       }
-      rocket.accDev += Math.abs(d.angle) * (1 / 60);
-      rocket.path.push({ x: d.lateral_pos, y: d.altitude });
       if (d.camera_active !== undefined) cameraActive = d.camera_active;
       // Update PiP if a frame was included
       if (d.frame) {
@@ -73,7 +74,9 @@ function connectWS() {
         $camFrame.style.display = "block";
         $pipPlace.style.display = "none";
       }
-      updateHUD();
+      if (gameState !== "replay-intro") {
+        updateHUD();
+      }
     }
 
     else if (d.action === "pid_intro") {
@@ -116,6 +119,12 @@ function connectWS() {
         
         if (overlay) overlay.classList.add("hidden");
         gameState = "playing_pid";
+        
+        // Reset rocket visually
+        rocket.angle = 0;
+        rocket.altitude = 0;
+        rocket.lateralPos = 0;
+
         if ($btnSkip) $btnSkip.style.display = "inline-block";
         const banner = document.getElementById("warning-banner");
         if (banner) {
