@@ -53,7 +53,7 @@ function initThreeJS() {
 
     // Reuse procedural rocket but scale it up for map visibility
     minimapRocket = buildProceduralRocket();
-    minimapRocket.scale.set(1.5, 1.5, 1.5);
+    minimapRocket.scale.set(2.344, 2.344, 2.344);
     minimapScene.add(minimapRocket);
 
     const mAmbient = new THREE.AmbientLight(0xffffff, 0.8);
@@ -324,22 +324,28 @@ function renderMinimap() {
     targetBeacon.position.y = 0;
   }
 
-  // Camera: frame both the rocket and the target with margin
-  // Center X between rocket and target
-  const cx = (rx + tx) / 2;
-  // Center Y: show from ground (0) to above the rocket
-  const cy = Math.max(ry / 2, 10);
+  // Bounding box of the entire flight area: Launchpad (0,0), Target (tx,0), Rocket (rx,ry)
+  const minX = Math.min(0, tx, rx);
+  const maxX = Math.max(0, tx, rx);
+  const minY = Math.min(0, ry);
+  const maxY = Math.max(0, ry);
 
-  // Zoom: distance from camera so both points fit in view
-  // Compute the bounding box we need to show
-  const spanX = Math.abs(rx - tx) + 40;  // horizontal span + margin
-  const spanY = Math.max(ry + 20, 40);   // vertical span (ground to rocket + margin)
-  const span = Math.max(spanX, spanY);
+  // Centers
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
 
-  // Distance needed to fit 'span' units in view with FOV 50°
+  // Spans with margin
+  const spanX = (maxX - minX) + 60; // horizontal margin
+  const spanY = (maxY - minY) + 60; // vertical margin
+
+  // Compute required camera distance based on vertical and horizontal FOV
+  const aspect = minimapCamera.aspect || (minimapRenderer.domElement.clientWidth / minimapRenderer.domElement.clientHeight);
   const fovRad = minimapCamera.fov * Math.PI / 180;
-  const dist = (span / 2) / Math.tan(fovRad / 2);
-  const camZ = Math.max(dist, 60); // minimum distance
+  
+  const distY = (spanY / 2) / Math.tan(fovRad / 2);
+  const distX = (spanX / 2) / Math.tan(fovRad / 2) / aspect;
+
+  const camZ = Math.max(distY, distX, 80); // minimum distance
 
   minimapCamera.position.set(cx, cy, camZ);
   minimapCamera.lookAt(cx, cy, 0);
