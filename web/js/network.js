@@ -76,94 +76,84 @@ function connectWS() {
       updateHUD();
     }
 
-    else if (d.action === "game_over") {
-      Object.assign(rocket, d.state);
+    else if (d.action === "pid_intro") {
+      gameState = "replay-intro";
+      rocket.path = []; // Reset minimap trace
 
-      if (d.pid_trajectory && d.pid_trajectory.length > 0) {
-        gameState = "replay-intro";
-        rocket.path = []; // Fix minimap during replay
+      const gs = document.getElementById("game-screen");
+      if (gs) gs.classList.add("pid-filter");
 
-        // Add visual filter
-        const gs = document.getElementById("game-screen");
-        if (gs) gs.classList.add("pid-filter");
+      const overlay = document.getElementById("replay-overlay");
+      const landingOverlay = document.getElementById("landing-overlay");
 
-        replayData = d;
-        replayIndex = 0;
-        replayFrameCounter = 0;
+      const hLast = d.human_trajectory && d.human_trajectory.length > 0 ? d.human_trajectory[d.human_trajectory.length - 1].lateral_pos : 0;
+      const targetX = d.target_x || 0;
+      const dist = Math.abs(hLast - targetX);
+      
+      let hue = Math.max(0, 120 - (dist / 40) * 120);
+      let distColor = `hsl(${hue}, 100%, 50%)`;
+      
+      let msg = "";
+      let color = distColor;
+      let subtitle = `Aterrizaste a ${dist.toFixed(1)} metros del objetivo`;
 
-        const overlay = document.getElementById("replay-overlay");
-        const landingOverlay = document.getElementById("landing-overlay");
+      if (dist <= 5) {
+        msg = "¡ATERRIZAJE PERFECTO!";
+        subtitle = `¡En el blanco! A solo ${dist.toFixed(1)} metros.`;
+      } else if (dist <= 25) {
+        msg = "¡BUEN INTENTO!";
+        subtitle = `Llegaste a ${dist.toFixed(1)} metros del centro.`;
+      } else {
+        msg = "MISIÓN FALLIDA";
+        subtitle = `Demasiado lejos. Te faltaron ${dist.toFixed(1)} metros.`;
+      }
 
-        const hLast = d.human_trajectory && d.human_trajectory.length > 0 ? d.human_trajectory[d.human_trajectory.length - 1].lateral_pos : 0;
-        const targetX = rocket.targetX || 0;
-        const dist = Math.abs(hLast - targetX);
-        
-        // Calculate a color from Green (120) to Red (0) based on distance (0 to 40 meters)
-        let hue = Math.max(0, 120 - (dist / 40) * 120);
-        let distColor = `hsl(${hue}, 100%, 50%)`;
-        
-        let msg = "";
-        let color = distColor; // Default to the distance color
-        let subtitle = `Aterrizaste a ${dist.toFixed(1)} metros del objetivo`;
+      if (d.crashed) {
+        msg += " (CHOQUE)";
+        subtitle += " ¡Pero la nave se destruyó al impactar!";
+      }
 
-        if (dist <= 5) {
-          msg = "¡ATERRIZAJE PERFECTO!";
-          subtitle = `¡En el blanco! A solo ${dist.toFixed(1)} metros.`;
-        } else if (dist <= 25) {
-          msg = "¡BUEN INTENTO!";
-          subtitle = `Llegaste a ${dist.toFixed(1)} metros del centro.`;
-        } else {
-          msg = "MISIÓN FALLIDA";
-          subtitle = `Demasiado lejos. Te faltaron ${dist.toFixed(1)} metros.`;
+      const startPID = () => {
+        if (overlay) overlay.classList.add("hidden");
+        gameState = "playing_pid";
+        if ($btnSkip) $btnSkip.style.display = "inline-block";
+        const banner = document.getElementById("warning-banner");
+        if (banner) {
+          banner.textContent = "SIMULACIÓN - SISTEMA PID";
+          banner.className = "warning-banner replay-banner";
+        }
+        const label = document.getElementById("hud-user-label");
+        if (label) label.textContent = "INCLINACIÓN PID (CANARDS)";
+      };
+
+      if (landingOverlay) {
+        const tTitle = document.getElementById("landing-title");
+        const tSub = document.getElementById("landing-subtitle");
+        if (tTitle) {
+          tTitle.textContent = msg;
+          tTitle.style.color = color;
+          tTitle.style.textShadow = `0 0 30px ${color}`;
+        }
+        if (tSub) {
+          tSub.textContent = subtitle;
+          tSub.style.color = (color === "#ffcc00") ? "#ffffff" : color;
         }
 
-        // Si además la nave chocó (velocidad o ángulo excesivo), agregamos la advertencia
-        if (d.crashed) {
-          msg += " (CHOQUE)";
-          subtitle += " ¡Pero la nave se destruyó al impactar!";
-        }
-
-        const startPID = () => {
-          if (overlay) overlay.classList.add("hidden");
-          gameState = "replay";
-          if ($btnSkip) $btnSkip.style.display = "inline-block";
-          const banner = document.getElementById("warning-banner");
-          if (banner) {
-            banner.textContent = "REPETICIÓN - SISTEMA PID";
-            banner.className = "warning-banner replay-banner";
-          }
-          const label = document.getElementById("hud-user-label");
-          if (label) label.textContent = "INCLINACIÓN PID (CANARDS)";
-        };
-
-        if (landingOverlay) {
-          const tTitle = document.getElementById("landing-title");
-          const tSub = document.getElementById("landing-subtitle");
-          if (tTitle) {
-            tTitle.textContent = msg;
-            tTitle.style.color = color;
-            tTitle.style.textShadow = `0 0 30px ${color}`;
-          }
-          if (tSub) {
-            tSub.textContent = subtitle;
-            tSub.style.color = (color === "#ffcc00") ? "#ffffff" : color; // Keep white if yellow, else match red/green
-          }
-
-          landingOverlay.classList.remove("hidden");
-          landingOverlayTimeout = setTimeout(() => {
-            landingOverlay.classList.add("hidden");
-            if (overlay) overlay.classList.remove("hidden");
-            pidStartTimeout = setTimeout(startPID, 2500);
-          }, 2500); // 2.5 seconds visibility
-        } else {
+        landingOverlay.classList.remove("hidden");
+        landingOverlayTimeout = setTimeout(() => {
+          landingOverlay.classList.add("hidden");
           if (overlay) overlay.classList.remove("hidden");
           pidStartTimeout = setTimeout(startPID, 2500);
-        }
-
+        }, 2500);
       } else {
-        gameState = "results";
-        showResults(d);
+        if (overlay) overlay.classList.remove("hidden");
+        pidStartTimeout = setTimeout(startPID, 2500);
       }
+    }
+
+    else if (d.action === "game_over") {
+      gameState = "results";
+      showResults(d);
     }
 
     else if (d.action === "ork_parsed") {

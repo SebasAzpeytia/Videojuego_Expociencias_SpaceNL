@@ -267,7 +267,13 @@ function renderGame() {
         else if (hue > 120) { r = 0; g = 1; b = (hue - 120) / 60; }
         else if (hue > 60)  { r = (120 - hue) / 60; g = 1; b = 0; }
         else                { r = 1; g = hue / 60; b = 0; }
-        col[s * 3] = r; col[s * 3 + 1] = g; col[s * 3 + 2] = b;
+
+        // Animación del flujo a lo largo de las streamlines
+        const timeOffset = performance.now() * 0.015;
+        const phase = s * 0.3 - timeOffset;
+        const pulse = 0.15 + 0.85 * Math.max(0, Math.sin(phase)); // Pulsos de flujo
+
+        col[s * 3] = r * pulse; col[s * 3 + 1] = g * pulse; col[s * 3 + 2] = b * pulse;
 
         // Advance the streamline using Euler integration
         if (mag > 0.0005) {

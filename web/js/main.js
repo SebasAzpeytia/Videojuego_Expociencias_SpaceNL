@@ -282,33 +282,14 @@ function runCountdown() {
 function loop() {
   cfdDashOffset -= 1.5; // Animate CFD dashed lines backwards to simulate flow
 
-  if (gameState === "playing") {
+  if (gameState === "playing" || gameState === "playing_pid") {
     pollKeyboard();
     // Always send keyboard_angle; backend decides which source to use
     wsSend({ action: "update", keyboard_angle: keyboardAngle });
     renderGame();
-  } else if (gameState === "replay") {
-    if (replayData && replayIndex < replayData.pid_trajectory.length) {
-      replayFrameCounter++;
-      // Since PID trajectory is at 20Hz and loop is 60Hz, step every 3 frames
-      if (replayFrameCounter % 3 === 0) {
-        const point = replayData.pid_trajectory[replayIndex];
-        rocket.angle = point.angle;
-        rocket.altitude = point.altitude;
-        rocket.lateralPos = point.lateral_pos;
-        rocket.userAngle = point.user_angle || 0;
-        rocket.candy = point.candy !== undefined ? point.candy : rocket.candy;
-        rocket.velocity = point.velocity || 0;
-        rocket.time = point.time;
-        rocket.path.push({ x: point.lateral_pos, y: point.altitude });
-        // HUD is updated inside loop directly
-        updateHUD();
-        renderGame();
-        replayIndex++;
-      }
-    } else {
-      skipReplay();
-    }
+  } else if (gameState === "replay-intro" || gameState === "paused" || gameState === "paused_pid") {
+    // Keep rendering the scene (CFD + rocket) during intro/pause overlays
+    renderGame();
   }
   requestAnimationFrame(loop);
 }
@@ -317,25 +298,15 @@ function skipReplay() {
   if (landingOverlayTimeout) clearTimeout(landingOverlayTimeout);
   if (pidStartTimeout) clearTimeout(pidStartTimeout);
   
-  if (gameState === "replay" || gameState === "replay-paused" || gameState === "replay-intro") {
-    gameState = "results";
-    
-    // Hide overlays if they were active
+  if (gameState === "playing_pid" || gameState === "paused_pid" || gameState === "replay-intro") {
     const overlay = document.getElementById("replay-overlay");
     const landingOverlay = document.getElementById("landing-overlay");
     if (overlay) overlay.classList.add("hidden");
     if (landingOverlay) landingOverlay.classList.add("hidden");
     
-    // Remove filters
-    const gs = document.getElementById("game-screen");
-    if (gs) gs.classList.remove("pid-filter");
-    
     if ($btnSkip) $btnSkip.style.display = "none";
-    const banner = document.getElementById("warning-banner");
-    if (banner) banner.className = "warning-banner hidden";
-    const label = document.getElementById("hud-user-label");
-    if (label) label.textContent = "INCLINACIÓN USUARIO (CANARDS)";
-    showResults(replayData);
+    
+    wsSend({ action: "skip_pid" });
   }
 }
 
@@ -403,12 +374,12 @@ function init() {
       gameState = "playing";
       $btnPause.textContent = "⏸ PAUSA (Espacio)";
       $btnPause.classList.remove("paused");
-    } else if (gameState === "replay") {
-      gameState = "replay-paused";
+    } else if (gameState === "playing_pid") {
+      gameState = "paused_pid";
       $btnPause.textContent = "▶ REANUDAR (Espacio)";
       $btnPause.classList.add("paused");
-    } else if (gameState === "replay-paused") {
-      gameState = "replay";
+    } else if (gameState === "paused_pid") {
+      gameState = "playing_pid";
       $btnPause.textContent = "⏸ PAUSA (Espacio)";
       $btnPause.classList.remove("paused");
     }
@@ -430,11 +401,11 @@ function init() {
   }
 
   document.addEventListener("keydown", (e) => {
-    if (e.code === "Space" && ["playing", "paused", "replay", "replay-paused"].includes(gameState)) {
+    if (e.code === "Space" && ["playing", "paused", "playing_pid", "paused_pid"].includes(gameState)) {
       e.preventDefault();
       togglePause();
     }
-    if (e.code === "KeyS" && (gameState === "replay" || gameState === "replay-paused")) {
+    if (e.code === "KeyS" && (gameState === "playing_pid" || gameState === "paused_pid" || gameState === "replay-intro")) {
       e.preventDefault();
       skipReplay();
     }

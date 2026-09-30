@@ -277,10 +277,13 @@ async def _ws_handler(ws):
         # ── physics tick ────────────────────────────────────────────────
         elif action == "update" and _active and _sim is not None:
             # Camera angle has priority; keyboard_angle is the fallback
-            if _use_cam:
-                user_angle = _cam.get_angle()
+            if getattr(_sim, "mode", "human") == "human":
+                if _use_cam:
+                    user_angle = _cam.get_angle()
+                else:
+                    user_angle = msg.get("keyboard_angle", 0.0)
             else:
-                user_angle = msg.get("keyboard_angle", 0.0)
+                user_angle = 0.0
 
             state = _sim.update(user_angle)
             
@@ -289,36 +292,46 @@ async def _ws_handler(ws):
                 crashed = abs(math.degrees(_sim.angle)) >= _sim.crash_angle
 
             hit_ground = _sim.altitude <= 0.0 and _sim.time > 1.0
-            if hit_ground:
-                _active = False
-                pid_traj = _sim.simulate_pid()
-                
-                h_traj   = _sim.trajectory[::3]
-                p_traj   = pid_traj
+            
+            if hit_ground or crashed:
+                if _sim.mode == "human":
+                    _sim.start_pid_mode()
+                    # Transición a la cinemática del PID
+                    await ws.send(json.dumps({
+                        "action": "pid_intro",
+                        "crashed": crashed,
+                        "human_trajectory": _sim.human_trajectory,
+                        "target_x": _sim.target_x
+                    }))
+                else:
+                    _active = False
+                    
+                    h_traj   = _sim.human_trajectory[::3]
+                    p_traj   = _sim.trajectory[::3]
 
-                h_dev = [abs(p["dev"]) for p in _sim.trajectory]
-                p_dev = [abs(p["dev"]) for p in pid_traj] if pid_traj else [0]
+                    h_dev = [abs(p["dev"]) for p in _sim.human_trajectory]
+                    p_dev = [abs(p["dev"]) for p in _sim.trajectory] if _sim.trajectory else [0]
 
-                h_std = (sum(d ** 2 for d in h_dev) / len(h_dev)) ** 0.5
-                p_std = (sum(d ** 2 for d in p_dev) / len(p_dev)) ** 0.5
-                red   = ((1 - p_std / h_std) * 100) if h_std > 0 else 97.33
+                    h_std = (sum(d ** 2 for d in h_dev) / len(h_dev)) ** 0.5 if h_dev else 0
+                    p_std = (sum(d ** 2 for d in p_dev) / len(p_dev)) ** 0.5 if p_dev else 0
+                    red   = ((1 - p_std / h_std) * 100) if h_std > 0 else 97.33
 
-                await ws.send(json.dumps({
-                    "action": "game_over",
-                    "crashed": crashed,
-                    "state":  state,
-                    "human_trajectory": h_traj,
-                    "pid_trajectory":   p_traj,
-                    "stats": {
-                        "human_max_deviation": round(max(h_dev), 2),
-                        "human_avg_deviation": round(sum(h_dev) / len(h_dev), 2),
-                        "human_std":           round(h_std, 2),
-                        "pid_max_deviation":   round(max(p_dev), 3),
-                        "pid_avg_deviation":   round(sum(p_dev) / len(p_dev), 3),
-                        "pid_std":             round(p_std, 3),
-                        "reduction_percent":   round(min(red, 99.99), 2),
-                    },
-                }))
+                    await ws.send(json.dumps({
+                        "action": "game_over",
+                        "crashed": crashed,
+                        "state":  state,
+                        "human_trajectory": h_traj,
+                        "pid_trajectory":   p_traj,
+                        "stats": {
+                            "human_max_deviation": round(max(h_dev) if h_dev else 0, 2),
+                            "human_avg_deviation": round(sum(h_dev) / len(h_dev) if h_dev else 0, 2),
+                            "human_std":           round(h_std, 2),
+                            "pid_max_deviation":   round(max(p_dev) if p_dev else 0, 3),
+                            "pid_avg_deviation":   round(sum(p_dev) / len(p_dev) if p_dev else 0, 3),
+                            "pid_std":             round(p_std, 3),
+                            "reduction_percent":   round(min(red, 99.99), 2),
+                        },
+                    }))
             else:
                 state["action"] = "state"
                 state["camera_active"] = _use_cam
@@ -331,6 +344,46 @@ async def _ws_handler(ws):
                         state["frame"] = frame
 
                 await ws.send(json.dumps(state))
+
+        # ── skip pid mode ───────────────────────────────────────────────
+        elif action == "skip_pid":
+            if _active and _sim is not None and getattr(_sim, "mode", "human") == "pid":
+                # Simular instantáneamente hasta el final
+                while True:
+                    _sim.update(0.0)
+                    if _sim.altitude <= 0.0 and _sim.time > 1.0:
+                        break
+                    if getattr(_sim, 'crash_enabled', True) and abs(math.degrees(_sim.angle)) >= _sim.crash_angle:
+                        break
+                    if _sim.time > 60.0: # Failsafe
+                        break
+                        
+                _active = False
+                h_traj   = _sim.human_trajectory[::3]
+                p_traj   = _sim.trajectory[::3]
+
+                h_dev = [abs(p["dev"]) for p in _sim.human_trajectory]
+                p_dev = [abs(p["dev"]) for p in _sim.trajectory] if _sim.trajectory else [0]
+                h_std = (sum(d ** 2 for d in h_dev) / len(h_dev)) ** 0.5 if h_dev else 0
+                p_std = (sum(d ** 2 for d in p_dev) / len(p_dev)) ** 0.5 if p_dev else 0
+                red   = ((1 - p_std / h_std) * 100) if h_std > 0 else 97.33
+
+                await ws.send(json.dumps({
+                    "action": "game_over",
+                    "crashed": (abs(math.degrees(_sim.angle)) >= _sim.crash_angle) if getattr(_sim, 'crash_enabled', True) else False,
+                    "state":  {"time": _sim.time}, # Dummy state for game_over
+                    "human_trajectory": h_traj,
+                    "pid_trajectory":   p_traj,
+                    "stats": {
+                        "human_max_deviation": round(max(h_dev) if h_dev else 0, 2),
+                        "human_avg_deviation": round(sum(h_dev) / len(h_dev) if h_dev else 0, 2),
+                        "human_std":           round(h_std, 2),
+                        "pid_max_deviation":   round(max(p_dev) if p_dev else 0, 3),
+                        "pid_avg_deviation":   round(sum(p_dev) / len(p_dev) if p_dev else 0, 3),
+                        "pid_std":             round(p_std, 3),
+                        "reduction_percent":   round(min(red, 99.99), 2),
+                    },
+                }))
 
         # ── parse ORK file immediately ──────────────────────────────────
         elif action == "parse_ork":

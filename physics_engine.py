@@ -64,6 +64,11 @@ class RocketSimulator:
         self.lateral_pos = 0.0        # m
         self.time = 0.0               # s
 
+        self.mode = "human"
+        self.human_trajectory = []
+        self.integral = 0.0
+        self.prev_err = 0.0
+
         # Wind internals
         self.wind_speed = 0.0
         self.target_wind = 0.0
@@ -78,6 +83,24 @@ class RocketSimulator:
         if self.cfd_enabled:
             self.cfd_nx = 48
             self.cfd_ny = 48
+            self.cfd = LBMSolver(self.cfd_nx, self.cfd_ny, nu=0.05)
+            self.last_cfd_angle = 999.0
+
+    def start_pid_mode(self):
+        self.human_trajectory = list(self.trajectory)
+        self.mode = "pid"
+        self.altitude = 0.0
+        self.lateral_pos = 0.0
+        self.angle = 0.0
+        self.angular_velocity = 0.0
+        self.vertical_velocity = 0.0
+        self.lateral_velocity = 0.0
+        self.time = 0.0
+        self.trajectory = []
+        self.candy = getattr(self, 'initial_candy', 0.25)
+        self.integral = 0.0
+        self.prev_err = 0.0
+        if self.cfd_enabled:
             self.cfd = LBMSolver(self.cfd_nx, self.cfd_ny, nu=0.05)
             self.last_cfd_angle = 999.0
             
@@ -248,7 +271,48 @@ class RocketSimulator:
     # ── Single physics step ─────────────────────────────────────────────
     def update(self, user_angle_deg: float) -> dict:
         dt = self.DT
-        user_clamped = max(-self.max_user_deg, min(self.max_user_deg, user_angle_deg))
+        
+        if getattr(self, "mode", "human") == "pid":
+            # Usar viento del historial
+            if self.wind_history:
+                t = self.time
+                idx = 0
+                while idx < len(self.wind_history) - 1 and self.wind_history[idx+1]["time"] < t:
+                    idx += 1
+                wind_torque = self.wind_history[idx]["wind_torque"]
+                wind_force = self.wind_history[idx]["wind_force"]
+            else:
+                wind_torque = 0.0
+                wind_force = 0.0
+                
+            # Calcular controlador
+            pos_err = getattr(self, 'target_x', 0.0) - self.lateral_pos
+            desired_lat_vel = max(-150.0, min(150.0, pos_err * 0.75))
+            vel_err = desired_lat_vel - self.lateral_velocity
+            
+            base_target = 0.0 if self.vertical_velocity >= 0 else math.pi
+            if self.vertical_velocity >= 0:
+                tilt = max(-math.pi/4, min(math.pi/4, vel_err * 0.03))
+            else:
+                tilt = -max(-math.pi/4, min(math.pi/4, vel_err * 0.03))
+                
+            target = (base_target + tilt + math.pi) % (2 * math.pi) - math.pi
+            dev_rad = (self.angle - target + math.pi) % (2 * math.pi) - math.pi
+            err = dev_rad
+            
+            KP, KI, KD = 150.0, 5.0, 50.0
+            self.integral = max(-0.5, min(0.5, self.integral + err * dt))
+            deriv = (err - self.prev_err) / dt if dt else 0.0
+            
+            canard_cmd = (KP * err + KI * self.integral + KD * deriv)
+            user_clamped = max(-self.max_user_deg, min(self.max_user_deg, canard_cmd))
+            
+            self.prev_err = err
+        else:
+            user_clamped = max(-self.max_user_deg, min(self.max_user_deg, user_angle_deg))
+            X_cp = self._calculate_barrowman_cp()
+            wind_torque, wind_force = self._step_wind(dt, X_cp)
+
         self.last_user_angle = user_clamped
 
         current_mass, current_inertia = self._get_mass_and_inertia()
@@ -263,8 +327,6 @@ class RocketSimulator:
                 self.candy = 0.0
 
         # Aerodynamic Lift Torque from Canards
-        X_cp = self._calculate_barrowman_cp()
-        
         cl = self._get_canard_cl(user_clamped)
         v_air = max(1.0, abs(self.vertical_velocity))
         q = 0.5 * self.RHO * (v_air)**2
@@ -278,8 +340,6 @@ class RocketSimulator:
         X_canard = self.length * 0.15 + (canard_root / 2.0)
         lever_arm = CG - X_canard
         user_torque = -lift * lever_arm
-        
-        wind_torque, wind_force = self._step_wind(dt, X_cp)
         damping_torque = -self.damping * self.angular_velocity
         gravity_torque = current_mass * 9.81 * 0.1 * math.sin(self.angle)
 
@@ -377,147 +437,4 @@ class RocketSimulator:
             
         return state_dict
 
-    # ── PID replay (200 Hz) ─────────────────────────────────────────────
-    def simulate_pid(self) -> list[dict]:
-        """Re-run the *exact same* wind profile with a tuned PID controller
-        operating at 200 Hz to showcase the 97.33 % dispersion reduction."""
 
-        if not self.wind_history:
-            return []
-
-        traj: list[dict] = []
-        angle = 0.0
-        omega = 0.0
-        alt = 0.0
-        lat = 0.0
-        v_vel = 0.0
-        lat_vel = 0.0
-
-        # PID gains (tuned for angles)
-        KP, KI, KD = 150.0, 5.0, 50.0
-        integral = 0.0
-        prev_err = 0.0
-
-        dt = 1.0 / 200.0
-
-        total_time = self.wind_history[-1]["time"] if self.wind_history else 0.0
-        t = 0.0
-        w_idx = 0
-        sample = 0
-        sim_candy = getattr(self, 'initial_candy', 10.0) # Reset fuel for simulation
-
-        # run until rocket lands or a maximum time to prevent infinite loops
-        while (alt > 0 or t < 1.0) and t < 60.0:
-            if t < total_time:
-                # Interpolate recorded wind torque
-                while (
-                    w_idx < len(self.wind_history) - 1
-                    and self.wind_history[w_idx + 1]["time"] < t
-                ):
-                    w_idx += 1
-                wind_torque = self.wind_history[w_idx]["wind_torque"]
-            else:
-                X_cp = self._calculate_barrowman_cp()
-                wind_torque, _ = self._step_wind(dt, X_cp)
-
-            # Cascading Guidance System (Pos -> Vel -> Angle)
-            pos_err = getattr(self, 'target_x', 0.0) - lat
-            desired_lat_vel = max(-150.0, min(150.0, pos_err * 0.75))
-            vel_err = desired_lat_vel - lat_vel
-            
-            base_target = 0.0 if v_vel >= 0 else math.pi
-            if v_vel >= 0:
-                tilt = max(-math.pi/4, min(math.pi/4, vel_err * 0.03))
-            else:
-                tilt = -max(-math.pi/4, min(math.pi/4, vel_err * 0.03))
-                
-            target = (base_target + tilt + math.pi) % (2 * math.pi) - math.pi
-            dev_rad = (angle - target + math.pi) % (2 * math.pi) - math.pi
-            err = dev_rad
-            
-            integral = max(-0.5, min(0.5, integral + err * dt))
-            deriv = (err - prev_err) / dt if dt else 0.0
-            
-            canard_cmd = (KP * err + KI * integral + KD * deriv)
-            canard_cmd = max(-self.max_user_deg, min(self.max_user_deg, canard_cmd))
-            
-            # Canard Aerodynamics
-            cl = self._get_canard_cl(canard_cmd)
-            v_air = max(1.0, abs(v_vel))
-            q = 0.5 * self.RHO * (v_air)**2
-            canard_span = 0.08
-            canard_root = 0.1
-            s_canard_real = canard_span * canard_root
-            lift = q * s_canard_real * cl
-            
-            CG = getattr(self, 'length', 3.0) / 2.0
-            X_canard = getattr(self, 'length', 3.0) * 0.15 + (canard_root / 2.0)
-            lever_arm = CG - X_canard
-            user_torque = -lift * lever_arm
-
-            ctrl = user_torque
-
-            damp = -self.damping * omega
-            
-            current_mass = getattr(self, 'dry_mass', 1.5) + getattr(self, 'candy', 0.0)
-            current_inertia = ((1 / 12) * current_mass * getattr(self, 'length', 3.0) ** 2) * self.inertia_mult
-            
-            grav = current_mass * 9.81 * 0.1 * math.sin(angle)
-
-            acc = (ctrl + wind_torque + damp + grav) / current_inertia
-            omega += acc * dt
-            angle += omega * dt
-            while angle > math.pi: angle -= 2 * math.pi
-            while angle < -math.pi: angle += 2 * math.pi
-            
-            burn_rate = 0.125
-            thrust = 0.0
-            if sim_candy > 0:
-                sim_candy -= burn_rate * dt
-                thrust = 138.56
-                if sim_candy < 0:
-                    sim_candy = 0.0
-                    
-            # 2D Kinematics
-            thrust_y = thrust * math.cos(angle)
-            thrust_x = thrust * math.sin(angle)
-            
-            v_mag = math.sqrt(v_vel**2 + lat_vel**2)
-            drag_mag = 0.5 * self.RHO * (v_mag**2) * self.cd * getattr(self, 'a_frontal', 0.05)
-            
-            drag_y = drag_mag * (v_vel / v_mag) if v_mag > 0 else 0.0
-            drag_x = drag_mag * (lat_vel / v_mag) if v_mag > 0 else 0.0
-            
-            v_angle = math.atan2(lat_vel, v_vel) if v_mag > 0.1 else (0.0 if v_vel >= 0 else math.pi)
-            aoa = (angle - v_angle + math.pi) % (2 * math.pi) - math.pi
-            lift_mag = 0.5 * self.RHO * (v_mag**2) * getattr(self, 'a_frontal', 0.05) * 2.0 * math.sin(aoa)
-            lift_x = lift_mag * math.cos(v_angle)
-            lift_y = lift_mag * -math.sin(v_angle)
-            
-            v_acc = (thrust_y + lift_y - current_mass * 9.81 - drag_y) / current_mass
-            l_acc = (thrust_x + lift_x - drag_x) / current_mass
-            
-            v_vel += v_acc * dt
-            lat_vel += l_acc * dt
-            
-            alt += v_vel * dt
-            lat += lat_vel * dt
-
-            prev_err = err
-            t += dt
-            sample += 1
-
-            # Downsample to ~20 Hz for JSON transfer
-            if sample % 10 == 0:
-                traj.append(dict(
-                    time=round(t, 2),
-                    angle=round(math.degrees(angle), 3),
-                    dev=round(math.degrees(dev_rad), 3),
-                    altitude=round(alt, 2),
-                    lateral_pos=round(lat, 3),
-                    user_angle=round(canard_cmd, 2),
-                    candy=round(sim_candy, 2),
-                    velocity=round(v_vel, 1)
-                ))
-
-        return traj
