@@ -1,5 +1,11 @@
 // --- THREE.JS RENDERING ---
-
+const EXHAUST_COUNT = 1200;
+let exhaustGeo;
+let exhaustSystem;
+let exhaustVelocities = new Float32Array(EXHAUST_COUNT * 3);
+let exhaustAges = new Float32Array(EXHAUST_COUNT);
+let exhaustMaxAges = new Float32Array(EXHAUST_COUNT);
+let exhaustIdx = 0;
 
 function initThreeJS() {
   renderer = new THREE.WebGLRenderer({ canvas: $canvas, antialias: true, alpha: true });
@@ -34,6 +40,54 @@ function initThreeJS() {
     rocketGroup = modelGroup;
     scene.add(rocketGroup);
   }, true);
+
+  // Initialize Exhaust Particle System
+  const posArray = new Float32Array(EXHAUST_COUNT * 3);
+  for(let i=0; i<EXHAUST_COUNT; i++) {
+    exhaustAges[i] = 999; // dead initially
+    exhaustMaxAges[i] = 40 + Math.random() * 40;
+  }
+  exhaustGeo = new THREE.BufferGeometry();
+  exhaustGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+  exhaustGeo.setAttribute('age', new THREE.BufferAttribute(exhaustAges, 1));
+  exhaustGeo.setAttribute('maxAge', new THREE.BufferAttribute(exhaustMaxAges, 1));
+  
+  const exhaustMat = new THREE.ShaderMaterial({
+    vertexShader: `
+      attribute float age;
+      attribute float maxAge;
+      varying float vAge;
+      varying float vMaxAge;
+      void main() {
+        vAge = age;
+        vMaxAge = maxAge;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = (1.0 - (age / maxAge)) * 200.0 * (1.0 / -mvPosition.z);
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `,
+    fragmentShader: `
+      varying float vAge;
+      varying float vMaxAge;
+      void main() {
+        float t = vAge / vMaxAge;
+        if (t >= 1.0) discard;
+        vec3 color = mix(vec3(1.0, 1.0, 0.8), vec3(1.0, 0.3, 0.0), t * 1.5);
+        float alpha = (1.0 - t) * 1.5;
+        vec2 coord = gl_PointCoord - vec2(0.5);
+        float dist = length(coord);
+        if(dist > 0.5) discard;
+        alpha *= (0.5 - dist) * 2.0; 
+        gl_FragColor = vec4(color, alpha);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+
+  exhaustSystem = new THREE.Points(exhaustGeo, exhaustMat);
+  scene.add(exhaustSystem);
 
   // Ground mesh for visual context during liftoff
   const groundGroup = new THREE.Group();
@@ -370,6 +424,49 @@ function renderGame() {
   if (rocketGroup) {
     rocketGroup.rotation.z = -(rocket.angle * Math.PI / 180);
 
+    if (exhaustSystem) {
+      const posAttr = exhaustGeo.attributes.position;
+      const ageAttr = exhaustGeo.attributes.age;
+      
+      if (rocket.candy > 0 && gameState !== "results" && !rocket.isFalling) {
+        const nozzleOffset = new THREE.Vector3(0, -2.8, 0);
+        nozzleOffset.applyEuler(rocketGroup.rotation);
+        const nozzleWorld = rocketGroup.position.clone().add(nozzleOffset);
+
+        const downVector = new THREE.Vector3(0, -1, 0);
+        downVector.applyEuler(rocketGroup.rotation);
+
+        const particlesToSpawn = Math.max(3, Math.floor(rocket.candy * 20));
+        for(let i=0; i<particlesToSpawn; i++) {
+          exhaustIdx = (exhaustIdx + 1) % EXHAUST_COUNT;
+          
+          posAttr.array[exhaustIdx*3] = nozzleWorld.x + (Math.random()-0.5)*0.6;
+          posAttr.array[exhaustIdx*3+1] = nozzleWorld.y + (Math.random()-0.5)*0.6;
+          posAttr.array[exhaustIdx*3+2] = nozzleWorld.z + (Math.random()-0.5)*0.6;
+
+          ageAttr.array[exhaustIdx] = 0;
+          
+          const speed = 0.6 + Math.random() * 0.6;
+          exhaustVelocities[exhaustIdx*3] = downVector.x * speed + (Math.random()-0.5)*0.3;
+          exhaustVelocities[exhaustIdx*3+1] = downVector.y * speed + (Math.random()-0.5)*0.3;
+          exhaustVelocities[exhaustIdx*3+2] = downVector.z * speed + (Math.random()-0.5)*0.3;
+        }
+      }
+
+      const fallSpeed = Math.max(0, rocket.verticalVelocity / 1.5) * 0.05;
+      
+      for(let i=0; i<EXHAUST_COUNT; i++) {
+        if (ageAttr.array[i] < exhaustMaxAges[i]) {
+          ageAttr.array[i]++;
+          posAttr.array[i*3] += exhaustVelocities[i*3];
+          posAttr.array[i*3+1] += exhaustVelocities[i*3+1] - fallSpeed;
+          posAttr.array[i*3+2] += exhaustVelocities[i*3+2];
+        }
+      }
+
+      posAttr.needsUpdate = true;
+      ageAttr.needsUpdate = true;
+    }
     // Animate the 4 canards based on user input
     const uRad = (rocket.userAngle * Math.PI / 180);
     if (canards.length === 4) {
