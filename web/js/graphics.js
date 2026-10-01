@@ -9,7 +9,7 @@ function initThreeJS() {
 
   scene = new THREE.Scene();
 
-  camera = new THREE.PerspectiveCamera(60, $canvas.clientWidth / $canvas.clientHeight, 0.1, 20000);
+  camera = new THREE.PerspectiveCamera(60, $canvas.clientWidth / $canvas.clientHeight, 1.0, 20000);
   camera.position.z = 10;
   camera.position.y = 0;
 
@@ -39,32 +39,32 @@ function initThreeJS() {
   const groundGroup = new THREE.Group();
   
   const groundSolid = new THREE.Mesh(
-    new THREE.BoxGeometry(2000, 2, 2000),
+    new THREE.BoxGeometry(8000, 200, 8000),
     new THREE.MeshStandardMaterial({ color: 0x1a2118, roughness: 0.9, metalness: 0.1 })
   );
   groundSolid.receiveShadow = true;
-  groundSolid.position.y = -3.8; // Base position right below the rocket nozzle
+  groundSolid.position.y = -102.8; // Top of the box is at -2.8
   groundGroup.add(groundSolid);
   
-  const gridHelper = new THREE.GridHelper(2000, 500, 0x445544, 0x223322);
+  const gridHelper = new THREE.GridHelper(8000, 1000, 0x445544, 0x223322);
   gridHelper.position.y = -2.79; // Just above the box (box top is at -2.8)
   groundGroup.add(gridHelper);
 
   // Target landing pad
-  const padGeo = new THREE.CylinderGeometry(4, 4, 0.5, 32);
+  const padGeo = new THREE.CylinderGeometry(8, 8, 0.5, 32);
   const padMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.5, roughness: 0.5 });
   const pad = new THREE.Mesh(padGeo, padMat);
   pad.position.y = -2.54; // Sit on top of the box
   pad.name = "mainTargetMarker";
   
-  const ringGeo = new THREE.RingGeometry(2, 3, 32);
+  const ringGeo = new THREE.RingGeometry(4, 6, 32);
   const ringMat = new THREE.MeshBasicMaterial({ color: 0xff4444, side: THREE.DoubleSide });
   const ring = new THREE.Mesh(ringGeo, ringMat);
   ring.rotation.x = Math.PI / 2;
   ring.position.y = 0.26; // slightly above pad
   pad.add(ring);
   
-  const beaconGeo = new THREE.CylinderGeometry(1.5, 1.5, 20000, 16);
+  const beaconGeo = new THREE.CylinderGeometry(3, 3, 20000, 32);
   const beaconMat = new THREE.MeshBasicMaterial({ color: 0xff4444, transparent: true, opacity: 0.2, depthWrite: false });
   const beacon = new THREE.Mesh(beaconGeo, beaconMat);
   beacon.position.y = 10000;
@@ -97,12 +97,15 @@ function initThreeJS() {
     size: 0.6,
     transparent: true,
     opacity: 0.9,
+    depthWrite: false,
     sizeAttenuation: true
   });
   
   starsGroup = new THREE.Group();
   const starMesh1 = new THREE.Points(starGeo, starMat);
+  starMesh1.renderOrder = -10;
   const starMesh2 = new THREE.Points(starGeo, starMat);
+  starMesh2.renderOrder = -10;
   starMesh2.position.y = 800;
   starsGroup.add(starMesh1);
   starsGroup.add(starMesh2);
