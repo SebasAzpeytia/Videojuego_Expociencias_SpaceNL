@@ -20,6 +20,7 @@ function connectWS() {
       cameraActive = !!d.camera_active;
       gameState = "playing";
       rocket.targetX = d.target_x || 0;
+      if (typeof rocketGroup !== 'undefined' && rocketGroup) rocketGroup.visible = true;
       showScreen("game-screen");
       resizeCanvas();
 
@@ -111,6 +112,10 @@ function connectWS() {
       if (d.crashed) {
         msg += " (CHOQUE)";
         subtitle += " ¡Pero la nave se destruyó al impactar!";
+        if (typeof createExplosion === 'function') {
+          createExplosion(0, 0, 0);
+          if (typeof rocketGroup !== 'undefined' && rocketGroup) rocketGroup.visible = false;
+        }
       }
 
       const startPID = () => {
@@ -124,6 +129,7 @@ function connectWS() {
         rocket.angle = 0;
         rocket.altitude = 0;
         rocket.lateralPos = 0;
+        if (typeof rocketGroup !== 'undefined' && rocketGroup) rocketGroup.visible = true;
 
         if ($btnSkip) $btnSkip.style.display = "inline-block";
         const banner = document.getElementById("warning-banner");
@@ -163,8 +169,19 @@ function connectWS() {
     }
 
     else if (d.action === "game_over") {
-      gameState = "results";
-      showResults(d);
+      if (d.crashed) {
+        if (typeof createExplosion === 'function') {
+          createExplosion(0, 0, 0);
+          if (typeof rocketGroup !== 'undefined' && rocketGroup) rocketGroup.visible = false;
+        }
+        setTimeout(() => {
+          gameState = "results";
+          showResults(d);
+        }, 1500);
+      } else {
+        gameState = "results";
+        showResults(d);
+      }
     }
 
     else if (d.action === "ork_parsed") {

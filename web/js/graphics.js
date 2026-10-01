@@ -303,6 +303,46 @@ function buildProceduralRocket(isMain = false) {
   return group;
 }
 
+let explosions = [];
+let screenShake = 0;
+
+function createExplosion(x, y, z) {
+  const fireGeo = new THREE.SphereGeometry(1, 32, 32);
+  const fireMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 1, depthWrite: false });
+  const fireball = new THREE.Mesh(fireGeo, fireMat);
+  fireball.position.set(x, y, z);
+  scene.add(fireball);
+
+  const particleCount = 100;
+  const pGeo = new THREE.BufferGeometry();
+  const pPos = new Float32Array(particleCount * 3);
+  const pVel = [];
+  for(let i=0; i<particleCount; i++) {
+    pPos[i*3] = x;
+    pPos[i*3+1] = y;
+    pPos[i*3+2] = z;
+    pVel.push(new THREE.Vector3(
+      (Math.random() - 0.5) * 20,
+      (Math.random() - 0.5) * 20,
+      (Math.random() - 0.5) * 20
+    ));
+  }
+  pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+  const pMat = new THREE.PointsMaterial({ color: 0xff4400, size: 0.8, transparent: true, opacity: 1, depthWrite: false });
+  const pSystem = new THREE.Points(pGeo, pMat);
+  scene.add(pSystem);
+
+  explosions.push({
+    fireball: fireball,
+    particles: pSystem,
+    velocities: pVel,
+    age: 0,
+    maxAge: 60
+  });
+
+  screenShake = 15;
+}
+
 function resizeCanvas() {
   $canvas.width = $canvas.clientWidth * devicePixelRatio;
   $canvas.height = $canvas.clientHeight * devicePixelRatio;
@@ -451,6 +491,39 @@ function renderGame() {
 
       line.geometry.attributes.position.needsUpdate = true;
       line.geometry.attributes.color.needsUpdate = true;
+    }
+  }
+
+  if (screenShake > 0) {
+    camera.position.x = (Math.random() - 0.5) * screenShake * 0.1;
+    camera.position.y = (Math.random() - 0.5) * screenShake * 0.1;
+    screenShake -= 0.5;
+  } else {
+    camera.position.x = 0;
+    camera.position.y = 0;
+  }
+
+  for(let i=explosions.length-1; i>=0; i--) {
+    let exp = explosions[i];
+    exp.age++;
+    
+    const scale = 1 + exp.age * 0.8;
+    exp.fireball.scale.set(scale, scale, scale);
+    exp.fireball.material.opacity = 1 - (exp.age / exp.maxAge);
+    
+    const positions = exp.particles.geometry.attributes.position.array;
+    for(let p=0; p<positions.length/3; p++) {
+      positions[p*3] += exp.velocities[p].x * 0.1;
+      positions[p*3+1] += exp.velocities[p].y * 0.1;
+      positions[p*3+2] += exp.velocities[p].z * 0.1;
+    }
+    exp.particles.geometry.attributes.position.needsUpdate = true;
+    exp.particles.material.opacity = 1 - (exp.age / exp.maxAge);
+
+    if (exp.age >= exp.maxAge) {
+      scene.remove(exp.fireball);
+      scene.remove(exp.particles);
+      explosions.splice(i, 1);
     }
   }
 
