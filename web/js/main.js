@@ -358,6 +358,9 @@ function init() {
 
   $btnStart.addEventListener("click", () => {
     $btnStart.disabled = true;
+    if (typeof audioListener !== 'undefined' && audioListener.context.state === 'suspended') {
+      audioListener.context.resume();
+    }
     runCountdown();
   });
 
@@ -408,6 +411,10 @@ function init() {
   });
 
   function resetGame() {
+    if (typeof thrustSound !== 'undefined' && thrustSound) {
+      if (thrustSound.isPlaying) thrustSound.stop();
+      thrustSound.hasPlayed = false;
+    }
     if (landingOverlayTimeout) clearTimeout(landingOverlayTimeout);
     if (pidStartTimeout) clearTimeout(pidStartTimeout);
     

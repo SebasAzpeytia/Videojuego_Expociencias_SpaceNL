@@ -1,4 +1,7 @@
 // --- THREE.JS RENDERING ---
+let audioListener, audioLoader;
+let thrustSound, explosionSound;
+
 const EXHAUST_COUNT = 1200;
 let exhaustGeo;
 let exhaustSystem;
@@ -18,6 +21,26 @@ function initThreeJS() {
   camera = new THREE.PerspectiveCamera(60, $canvas.clientWidth / $canvas.clientHeight, 1.0, 20000);
   camera.position.z = 10;
   camera.position.y = 0;
+
+  // --- AUDIO SETUP ---
+  audioListener = new THREE.AudioListener();
+  camera.add(audioListener);
+  audioLoader = new THREE.AudioLoader();
+
+  thrustSound = new THREE.Audio(audioListener);
+  explosionSound = new THREE.Audio(audioListener);
+
+  audioLoader.load('assets/sounds/rocket-launch.mp3', function(buffer) {
+    thrustSound.setBuffer(buffer);
+    thrustSound.setLoop(false);
+    thrustSound.setVolume(0.25);
+  });
+
+  audioLoader.load('assets/sounds/explosion-rocket.mp3', function(buffer) {
+    explosionSound.setBuffer(buffer);
+    explosionSound.setLoop(false);
+    explosionSound.setVolume(0.25);
+  });
 
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
   scene.add(ambientLight);
@@ -361,6 +384,10 @@ let explosions = [];
 let screenShake = 0;
 
 function createExplosion(x, y, z) {
+  if (typeof explosionSound !== 'undefined' && explosionSound && !explosionSound.isPlaying && explosionSound.buffer) {
+    explosionSound.play();
+  }
+
   const fireGeo = new THREE.SphereGeometry(1, 32, 32);
   const fireMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 1, depthWrite: false });
   const fireball = new THREE.Mesh(fireGeo, fireMat);
@@ -429,6 +456,11 @@ function renderGame() {
       const ageAttr = exhaustGeo.attributes.age;
       
       if (rocket.candy > 0 && gameState !== "results" && !rocket.isFalling) {
+        if (typeof thrustSound !== 'undefined' && thrustSound && !thrustSound.isPlaying && !thrustSound.hasPlayed && thrustSound.buffer) {
+          thrustSound.play();
+          thrustSound.hasPlayed = true;
+        }
+
         const nozzleOffset = new THREE.Vector3(0, -2.8, 0);
         nozzleOffset.applyEuler(rocketGroup.rotation);
         const nozzleWorld = rocketGroup.position.clone().add(nozzleOffset);
@@ -450,6 +482,10 @@ function renderGame() {
           exhaustVelocities[exhaustIdx*3] = downVector.x * speed + (Math.random()-0.5)*0.3;
           exhaustVelocities[exhaustIdx*3+1] = downVector.y * speed + (Math.random()-0.5)*0.3;
           exhaustVelocities[exhaustIdx*3+2] = downVector.z * speed + (Math.random()-0.5)*0.3;
+        }
+      } else {
+        if (typeof thrustSound !== 'undefined' && thrustSound && thrustSound.isPlaying) {
+          thrustSound.stop();
         }
       }
 

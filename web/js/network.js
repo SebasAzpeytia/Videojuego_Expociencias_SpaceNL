@@ -131,6 +131,11 @@ function connectWS() {
         rocket.lateralPos = 0;
         if (typeof rocketGroup !== 'undefined' && rocketGroup) rocketGroup.visible = true;
 
+        if (typeof thrustSound !== 'undefined' && thrustSound) {
+          if (thrustSound.isPlaying) thrustSound.stop();
+          thrustSound.hasPlayed = false;
+        }
+
         if ($btnSkip) $btnSkip.style.display = "inline-block";
         const banner = document.getElementById("warning-banner");
         if (banner) {
