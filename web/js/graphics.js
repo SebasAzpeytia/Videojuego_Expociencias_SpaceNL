@@ -193,7 +193,7 @@ function initThreeJS() {
     // Reuse procedural or GLB rocket for map visibility
     loadRocketModel((modelGroup) => {
       minimapRocket = modelGroup;
-      minimapRocket.scale.set(2.344, 2.344, 2.344);
+      minimapRocket.scale.set(1.758, 1.758, 1.758); // 25% smaller
       minimapScene.add(minimapRocket);
     });
 
@@ -242,7 +242,7 @@ function loadRocketModel(callback, isMain = false) {
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z);
-      const scale = 7.8 / maxDim; // Adjust to match procedural rocket size (~7.8 units height)
+      const scale = (7.8 / maxDim) * 0.75; // Adjust to match procedural rocket size (~7.8 units height), made 25% smaller
       
       model.position.sub(center);
       model.scale.set(scale, scale, scale);
@@ -353,7 +353,7 @@ function buildProceduralRocket(isMain = false) {
     }
   });
 
-  group.scale.set(0.75, 0.75, 0.75);
+  group.scale.set(0.5625, 0.5625, 0.5625); // 0.75 * 0.75 (25% smaller)
   return group;
 }
 
@@ -743,7 +743,7 @@ function updateMainRocketModel() {
   
   loadRocketModel((modelGroup) => {
     minimapRocket = modelGroup;
-    minimapRocket.scale.set(2.344, 2.344, 2.344);
+    minimapRocket.scale.set(1.758, 1.758, 1.758); // 25% smaller
     minimapScene.add(minimapRocket);
   });
 }
