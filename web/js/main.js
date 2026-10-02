@@ -361,6 +361,9 @@ function init() {
     if (typeof audioListener !== 'undefined' && audioListener.context.state === 'suspended') {
       audioListener.context.resume();
     }
+    if (typeof menuMusic !== 'undefined' && menuMusic.isPlaying) {
+      menuMusic.stop();
+    }
     runCountdown();
   });
 
@@ -412,6 +415,12 @@ function init() {
 
   function resetGame() {
     launchBlastTriggered = false;
+    if (typeof gameMusic !== 'undefined' && gameMusic.isPlaying) {
+      gameMusic.stop();
+    }
+    if (typeof menuMusic !== 'undefined' && menuMusic.buffer && !menuMusic.isPlaying) {
+      menuMusic.play();
+    }
     if (typeof thrustSound !== 'undefined' && thrustSound) {
       if (thrustSound.isPlaying) thrustSound.stop();
       thrustSound.hasPlayed = false;
@@ -451,6 +460,15 @@ function init() {
   }
 
   requestAnimationFrame(loop);
+
+  document.body.addEventListener('click', () => {
+    if (typeof audioListener !== 'undefined' && audioListener.context.state === 'suspended') {
+      audioListener.context.resume();
+    }
+    if (gameState === "splash" && typeof menuMusic !== 'undefined' && menuMusic.buffer && !menuMusic.isPlaying) {
+      menuMusic.play();
+    }
+  });
 }
 
 window.addEventListener("DOMContentLoaded", init);

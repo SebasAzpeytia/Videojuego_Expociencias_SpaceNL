@@ -20,6 +20,11 @@ function connectWS() {
       cameraActive = !!d.camera_active;
       gameState = "playing";
       rocket.targetX = d.target_x || 0;
+      
+      if (typeof gameMusic !== 'undefined' && gameMusic.buffer && !gameMusic.isPlaying) {
+        gameMusic.play();
+      }
+      
       if (typeof rocketGroup !== 'undefined' && rocketGroup) rocketGroup.visible = true;
       showScreen("game-screen");
       resizeCanvas();
@@ -174,6 +179,9 @@ function connectWS() {
     }
 
     else if (d.action === "game_over") {
+      if (typeof gameMusic !== 'undefined' && gameMusic.isPlaying) {
+        gameMusic.stop();
+      }
       if (d.crashed) {
         if (typeof createExplosion === 'function') {
           createExplosion(0, 0, 0);

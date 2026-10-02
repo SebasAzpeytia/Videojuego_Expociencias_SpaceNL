@@ -1,6 +1,6 @@
 // --- THREE.JS RENDERING ---
 let audioListener, audioLoader;
-let thrustSound, explosionSound;
+let thrustSound, explosionSound, menuMusic, gameMusic;
 
 const EXHAUST_COUNT = 1200;
 let exhaustGeo;
@@ -40,6 +40,23 @@ function initThreeJS() {
     explosionSound.setBuffer(buffer);
     explosionSound.setLoop(false);
     explosionSound.setVolume(0.25);
+  });
+
+  menuMusic = new THREE.Audio(audioListener);
+  audioLoader.load('assets/sounds/menu-music.mp3', function(buffer) {
+    menuMusic.setBuffer(buffer);
+    menuMusic.setLoop(true);
+    menuMusic.setVolume(0.1);
+    if (menuMusic.context.state === 'running') {
+      menuMusic.play();
+    }
+  });
+
+  gameMusic = new THREE.Audio(audioListener);
+  audioLoader.load('assets/sounds/game-music.mp3', function(buffer) {
+    gameMusic.setBuffer(buffer);
+    gameMusic.setLoop(true);
+    gameMusic.setVolume(0.1);
   });
 
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
