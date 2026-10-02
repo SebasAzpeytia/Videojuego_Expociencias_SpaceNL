@@ -411,6 +411,7 @@ function init() {
   });
 
   function resetGame() {
+    launchBlastTriggered = false;
     if (typeof thrustSound !== 'undefined' && thrustSound) {
       if (thrustSound.isPlaying) thrustSound.stop();
       thrustSound.hasPlayed = false;

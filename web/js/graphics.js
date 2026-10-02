@@ -85,7 +85,7 @@ function initThreeJS() {
         vAge = age;
         vMaxAge = maxAge;
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        gl_PointSize = (1.0 - (age / maxAge)) * 200.0 * (1.0 / -mvPosition.z);
+        gl_PointSize = (1.0 + (age / maxAge) * 3.0) * 800.0 * (1.0 / -mvPosition.z);
         gl_Position = projectionMatrix * mvPosition;
       }
     `,
@@ -95,7 +95,7 @@ function initThreeJS() {
       void main() {
         float t = vAge / vMaxAge;
         if (t >= 1.0) discard;
-        vec3 color = mix(vec3(1.0, 1.0, 0.8), vec3(1.0, 0.3, 0.0), t * 1.5);
+        vec3 color = mix(vec3(1.0, 0.9, 0.0), vec3(0.9, 0.1, 0.0), t * 1.5);
         float alpha = (1.0 - t) * 1.5;
         vec2 coord = gl_PointCoord - vec2(0.5);
         float dist = length(coord);
@@ -382,6 +382,28 @@ function buildProceduralRocket(isMain = false) {
 
 let explosions = [];
 let screenShake = 0;
+let launchBlastTriggered = false;
+let plumeFireballs = [];
+const plumeGeo = new THREE.SphereGeometry(0.8, 16, 16);
+const plumeMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.9, depthWrite: false });
+
+function createLaunchBlast(x, y, z) {
+  const fireGeo = new THREE.SphereGeometry(4, 32, 32);
+  const fireMat = new THREE.MeshBasicMaterial({ color: 0xff7700, transparent: true, opacity: 1, depthWrite: false });
+  const fireball = new THREE.Mesh(fireGeo, fireMat);
+  fireball.position.set(x, y, z);
+  scene.add(fireball);
+
+  explosions.push({
+    fireball: fireball,
+    particles: null,
+    velocities: [],
+    age: 0,
+    maxAge: 30
+  });
+  
+  screenShake = 5; // Reduced shake by 75%
+}
 
 function createExplosion(x, y, z) {
   if (typeof explosionSound !== 'undefined' && explosionSound && !explosionSound.isPlaying && explosionSound.buffer) {
@@ -468,20 +490,36 @@ function renderGame() {
         const downVector = new THREE.Vector3(0, -1, 0);
         downVector.applyEuler(rocketGroup.rotation);
 
-        const particlesToSpawn = Math.max(3, Math.floor(rocket.candy * 20));
+        if (!launchBlastTriggered) {
+          createLaunchBlast(nozzleWorld.x, nozzleWorld.y - 1.0, nozzleWorld.z);
+          launchBlastTriggered = true;
+        }
+
+        // Spawn volumetric fireball (plume) only during the first half second
+        if (rocket.time < 0.5) {
+          const plume = new THREE.Mesh(plumeGeo, plumeMat.clone());
+          plume.position.copy(nozzleWorld);
+          plume.position.x += (Math.random() - 0.5) * 1.5;
+          plume.position.z += (Math.random() - 0.5) * 1.5;
+          scene.add(plume);
+          plumeFireballs.push({ mesh: plume, age: 0, maxAge: 25 });
+        }
+
+        // Original particles logic (keep them but fewer)
+        const particlesToSpawn = Math.max(5, Math.floor(rocket.candy * 30));
         for(let i=0; i<particlesToSpawn; i++) {
           exhaustIdx = (exhaustIdx + 1) % EXHAUST_COUNT;
           
-          posAttr.array[exhaustIdx*3] = nozzleWorld.x + (Math.random()-0.5)*0.6;
-          posAttr.array[exhaustIdx*3+1] = nozzleWorld.y + (Math.random()-0.5)*0.6;
-          posAttr.array[exhaustIdx*3+2] = nozzleWorld.z + (Math.random()-0.5)*0.6;
+          posAttr.array[exhaustIdx*3] = nozzleWorld.x + (Math.random()-0.5)*3.0;
+          posAttr.array[exhaustIdx*3+1] = nozzleWorld.y + (Math.random()-0.5)*3.0;
+          posAttr.array[exhaustIdx*3+2] = nozzleWorld.z + (Math.random()-0.5)*3.0;
 
           ageAttr.array[exhaustIdx] = 0;
           
-          const speed = 0.6 + Math.random() * 0.6;
-          exhaustVelocities[exhaustIdx*3] = downVector.x * speed + (Math.random()-0.5)*0.3;
-          exhaustVelocities[exhaustIdx*3+1] = downVector.y * speed + (Math.random()-0.5)*0.3;
-          exhaustVelocities[exhaustIdx*3+2] = downVector.z * speed + (Math.random()-0.5)*0.3;
+          const speed = 2.0 + Math.random() * 3.0;
+          exhaustVelocities[exhaustIdx*3] = downVector.x * speed + (Math.random()-0.5)*3.0;
+          exhaustVelocities[exhaustIdx*3+1] = downVector.y * speed + (Math.random()-0.5)*3.0;
+          exhaustVelocities[exhaustIdx*3+2] = downVector.z * speed + (Math.random()-0.5)*3.0;
         }
       } else {
         if (typeof thrustSound !== 'undefined' && thrustSound && thrustSound.isPlaying) {
@@ -503,6 +541,28 @@ function renderGame() {
       posAttr.needsUpdate = true;
       ageAttr.needsUpdate = true;
     }
+
+    // Update plume fireballs
+    for(let i=plumeFireballs.length-1; i>=0; i--) {
+      let p = plumeFireballs[i];
+      p.age++;
+      
+      const scale = 1 + (p.age * 0.25);
+      p.mesh.scale.set(scale, scale, scale);
+      
+      const t = p.age / p.maxAge;
+      p.mesh.material.color.setHSL(0.12 * (1 - t), 1.0, 0.5 * (1 - t)); 
+      p.mesh.material.opacity = 1 - t;
+      
+      p.mesh.position.y -= 0.15; // Drift down slowly
+
+      if (p.age >= p.maxAge) {
+        scene.remove(p.mesh);
+        p.mesh.material.dispose();
+        plumeFireballs.splice(i, 1);
+      }
+    }
+
     // Animate the 4 canards based on user input
     const uRad = (rocket.userAngle * Math.PI / 180);
     if (canards.length === 4) {
@@ -644,18 +704,20 @@ function renderGame() {
     exp.fireball.scale.set(scale, scale, scale);
     exp.fireball.material.opacity = 1 - (exp.age / exp.maxAge);
     
-    const positions = exp.particles.geometry.attributes.position.array;
-    for(let p=0; p<positions.length/3; p++) {
-      positions[p*3] += exp.velocities[p].x * 0.1;
-      positions[p*3+1] += exp.velocities[p].y * 0.1;
-      positions[p*3+2] += exp.velocities[p].z * 0.1;
+    if (exp.particles) {
+      const positions = exp.particles.geometry.attributes.position.array;
+      for(let p=0; p<positions.length/3; p++) {
+        positions[p*3] += exp.velocities[p].x * 0.1;
+        positions[p*3+1] += exp.velocities[p].y * 0.1;
+        positions[p*3+2] += exp.velocities[p].z * 0.1;
+      }
+      exp.particles.geometry.attributes.position.needsUpdate = true;
+      exp.particles.material.opacity = 1 - (exp.age / exp.maxAge);
     }
-    exp.particles.geometry.attributes.position.needsUpdate = true;
-    exp.particles.material.opacity = 1 - (exp.age / exp.maxAge);
 
     if (exp.age >= exp.maxAge) {
       scene.remove(exp.fireball);
-      scene.remove(exp.particles);
+      if (exp.particles) scene.remove(exp.particles);
       explosions.splice(i, 1);
     }
   }
